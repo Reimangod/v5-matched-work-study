@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import subprocess
@@ -101,9 +102,16 @@ def audit() -> dict[str, Any]:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--verify-only", action="store_true")
+    arguments = parser.parse_args()
     output = ROOT / "artifacts" / "s0" / "isolation-audit-v1.json"
     result = audit()
-    write_json_exclusive(output, result)
+    if arguments.verify_only:
+        if output.read_bytes() != canonical_json_bytes(result):
+            raise RuntimeError("committed S0 audit does not match independent rebuild")
+    else:
+        write_json_exclusive(output, result)
     print(json.dumps({"passed": result["passed"], "checks": len(result["checks"])}, sort_keys=True))
 
 

@@ -17,10 +17,11 @@ Scientific and engineering constraints are recorded in
 git clone --recurse-submodules https://github.com/Reimangod/v5-matched-work-study.git
 cd v5-matched-work-study
 uv sync --extra test
-uv run python -m v5_matched_work.s0_build
-uv run python -m v5_matched_work.s0_audit
+uv run python -m v5_matched_work.s0_build --verify-only
+uv run python -m v5_matched_work.s0_audit --verify-only
 uv run pytest -q
 ```
 
-The build commands use exclusive-create publication and refuse to replace an
-existing canonical artifact.
+Initial publication uses exclusive-create semantics and refuses replacement.
+The clean-clone commands above independently rebuild the records in memory and
+require byte-identical committed artifacts.

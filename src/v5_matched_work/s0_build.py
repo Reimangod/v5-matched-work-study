@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 from pathlib import Path
@@ -129,9 +130,16 @@ def build_ledger() -> dict[str, Any]:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--verify-only", action="store_true")
+    arguments = parser.parse_args()
     output = ROOT / "artifacts" / "s0" / "isolation-ledger-v1.json"
     result = build_ledger()
-    write_json_exclusive(output, result)
+    if arguments.verify_only:
+        if output.read_bytes() != canonical_json_bytes(result):
+            raise RuntimeError("committed S0 ledger does not match independent rebuild")
+    else:
+        write_json_exclusive(output, result)
     print(json.dumps({"path": str(output), "files": result["historical_artifacts"]["file_count"]}, sort_keys=True))
 
 
