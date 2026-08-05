@@ -11,6 +11,13 @@ new result namespace.
 Scientific and engineering constraints are recorded in
 [`docs/CLAIM_BOUNDARY.md`](docs/CLAIM_BOUNDARY.md) and stage-specific protocols.
 
+The immutable v1 No-Go release remains valid. Audit remediation is recorded in
+[`docs/V2_AUDIT_REMEDIATION.md`](docs/V2_AUDIT_REMEDIATION.md). S2-v2 and
+S3-v2 close the H4, raw-event, and cap-calibration gaps. S4-v2 supplies a
+shared-counter orchestration layer, but the strict pre-S6 audit correctly
+rejects it as a substitute for concrete pinned molecular backends. S6–S14
+therefore remain unexecuted and not authorized.
+
 ## S0 reproduction
 
 ```bash
@@ -19,6 +26,11 @@ cd v5-matched-work-study
 uv sync --extra test
 uv run python -m v5_matched_work.s0_build --verify-only
 uv run python -m v5_matched_work.s0_audit --verify-only
+uv run python -m v5_matched_work.s3_build_v2 --verify-only
+uv run python -m v5_matched_work.s4_build_v2 --verify-only
+uv run python -m v5_matched_work.s5_freeze_v2 --verify-only
+uv run python -m v5_matched_work.strict_pre_s6_v2 --verify-only
+uv run python -m v5_matched_work.closure_audit_v2 --verify-only
 uv run pytest -q
 ```
 
