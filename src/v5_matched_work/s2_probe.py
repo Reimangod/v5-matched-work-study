@@ -6,7 +6,7 @@ from dataclasses import asdict
 import hashlib
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import numpy as np
 
@@ -34,12 +34,20 @@ def _factory(case_id: str, checkpoint: dict[str, Any]):
     if case_id == "lih-3.0":
         algorithm, pool, _ = lih_algorithm()
         return algorithm, pool
+    if case_id == "h4-1.5-known-development":
+        from dvg_obs_ceo.s8_probe import _algorithm as h2_h4_algorithm
+
+        return h2_h4_algorithm("h4-1.5-first-chemical-accuracy")
     return multisystem_algorithm(checkpoint["case"])
 
 
-def run_probe() -> dict[str, Any]:
+def run_probe(
+    cases: Mapping[str, Path] = CASES,
+    *,
+    probe_version: str = "s2-stationary-source-quantum-probe-v1",
+) -> dict[str, Any]:
     results = []
-    for case_id, path in CASES.items():
+    for case_id, path in cases.items():
         checkpoint = json.loads(path.read_text(encoding="utf-8"))
         algorithm, pool = _factory(case_id, checkpoint)
         algorithm.initialize()
@@ -114,7 +122,7 @@ def run_probe() -> dict[str, Any]:
                 },
             }
         )
-    return {"probe_version": "s2-stationary-source-quantum-probe-v1", "cases": results}
+    return {"probe_version": probe_version, "cases": results}
 
 
 def main() -> None:
