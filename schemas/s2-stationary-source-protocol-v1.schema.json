@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "stage", "status", "source_role", "parameter_stationarity_threshold_infinity", "finite_difference", "source_generation_contract", "quantum_probe", "checks", "failed_checks", "decision", "next_stage_authorized", "paper_measurement_cost", "claim_boundary", "protocol_digest"],
+  "properties": {
+    "schema": {"const": "v5-matched-work.s2-stationary-source-protocol.v1"},
+    "stage": {"const": "S2"},
+    "status": {"const": "COMPLETE"},
+    "source_role": {"type": "string"},
+    "parameter_stationarity_threshold_infinity": {"const": 1e-8},
+    "finite_difference": {"type": "object"},
+    "source_generation_contract": {"type": "object"},
+    "quantum_probe": {"type": "object"},
+    "checks": {"type": "object"},
+    "failed_checks": {"type": "array", "maxItems": 0},
+    "decision": {"const": "GO_S3"},
+    "next_stage_authorized": {"const": "S3"},
+    "paper_measurement_cost": {"type": "null"},
+    "claim_boundary": {"type": "string"},
+    "protocol_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}
