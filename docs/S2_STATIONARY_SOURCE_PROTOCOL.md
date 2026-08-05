@@ -16,3 +16,9 @@ online source-selection input in this study.
 S2 freezes identity semantics, not a claim that the historical CEO* growth was
 globally converged. All causal comparators must receive the same immutable
 source coordinates and structure.
+
+Execution incident `s2-probe-stdout-v1`: the pinned upstream initializer emits
+human-readable stdout, so the first completed probe could not be parsed as one
+JSON document. No scientific computation or checkpoint was changed. The
+reader now consumes the final, explicitly emitted JSON line and preserves
+fail-closed behavior when it is absent or malformed.

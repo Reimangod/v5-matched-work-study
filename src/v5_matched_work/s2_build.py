@@ -40,7 +40,10 @@ def quantum_probe() -> dict[str, Any]:
     )
     if completed.returncode != 0:
         raise RuntimeError("S2 quantum probe failed: " + completed.stderr[-4000:])
-    return json.loads(completed.stdout)
+    lines = [line for line in completed.stdout.splitlines() if line.strip()]
+    if not lines:
+        raise RuntimeError("S2 quantum probe produced no machine-readable output")
+    return json.loads(lines[-1])
 
 
 def build() -> dict[str, Any]:
