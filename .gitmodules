@@ -1,0 +1,3 @@
+[submodule "provenance/dvg-obs-ceo"]
+	path = provenance/dvg-obs-ceo
+	url = https://github.com/Reimangod/dvg-obs-ceo.git

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "v5-matched-work-study"
+version = "0.1.0"
+description = "Matched-work robustness study for sequential CEO* compression"
+requires-python = ">=3.10,<3.11"
+dependencies = []
+
+[project.optional-dependencies]
+test = [
+  "jsonschema>=4.23,<5",
+  "pytest>=8.3,<9",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/v5_matched_work"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
