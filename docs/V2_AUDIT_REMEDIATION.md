@@ -65,3 +65,12 @@ closed on four checks:
 S6–S14 have version-2 `NOT_AUTHORIZED` records. No molecular candidate
 performance was executed. This remains a pre-performance infrastructure No-Go,
 not a scientific result about V5 or matched-work performance.
+
+## Clean-clone verification
+
+A fresh recursive clone at the final commit was checked with the root test
+environment and the parent's locked `baseline` extra. The observed results were
+25 repository tests passed, S0 19/19 checks passed, S2-v2 five-source
+byte-identical reconstruction passed, and closure-v2 8/8 checks passed. S1's
+historical record remains 509 parent regression tests passed at S1 construction;
+the fresh-clone repository suite is the separate 25-test count.

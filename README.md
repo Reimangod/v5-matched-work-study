@@ -24,8 +24,12 @@ therefore remain unexecuted and not authorized.
 git clone --recurse-submodules https://github.com/Reimangod/v5-matched-work-study.git
 cd v5-matched-work-study
 uv sync --extra test
+cd provenance/dvg-obs-ceo
+uv sync --frozen --extra baseline
+cd ../..
 uv run python -m v5_matched_work.s0_build --verify-only
 uv run python -m v5_matched_work.s0_audit --verify-only
+uv run python -m v5_matched_work.s2_build_v2 --verify-only
 uv run python -m v5_matched_work.s3_build_v2 --verify-only
 uv run python -m v5_matched_work.s4_build_v2 --verify-only
 uv run python -m v5_matched_work.s5_freeze_v2 --verify-only
