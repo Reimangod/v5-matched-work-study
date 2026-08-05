@@ -122,6 +122,30 @@ class WorkLedger:
             delta=delta,
         )
 
+    def record_evidence(
+        self,
+        operation: str,
+        *,
+        method_id: str,
+        case_id: str,
+        candidate_id: str | None,
+        path_id: str,
+        outcome: str,
+        cache: str = "not-applicable",
+    ) -> WorkEvent:
+        """Record a zero-work classification without changing any counter."""
+
+        return self.record(
+            method_id=method_id,
+            case_id=case_id,
+            candidate_id=candidate_id,
+            path_id=path_id,
+            operation=operation,
+            outcome=outcome,
+            cache=cache,
+            delta=WorkVector(),
+        )
+
 
 OPERATION_COMPONENT = {
     "source-energy-evaluation": "N_E",
