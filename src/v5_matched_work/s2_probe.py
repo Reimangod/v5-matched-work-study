@@ -58,7 +58,10 @@ def run_probe() -> dict[str, Any]:
             statevector=state,
             work=WorkCounters(),
             adapt_iteration=len(checkpoint["iteration_counts"]),
-            metadata={"resource_structure_digest": resources.structure_digest},
+            metadata={
+                "resource_structure_digest": resources.structure_digest,
+                "budget_reference_energy_hartree": energy,
+            },
         )
         state_spec = state_preparation_spec(runtime, algorithm=algorithm, pool=pool)
         problem = problem_spec(algorithm=algorithm, case_id=case_id)
