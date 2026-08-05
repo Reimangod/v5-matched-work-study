@@ -58,8 +58,19 @@ def build_ledger() -> dict[str, Any]:
         "repository": {
             "name": "Reimangod/v5-matched-work-study",
             "initial_visibility": "private",
+            "observed_visibility": "private",
             "default_branch": "main",
             "remote": "https://github.com/Reimangod/v5-matched-work-study.git",
+            "governance": {
+                "branch_protection_enforced": False,
+                "tag_ruleset_enforced": False,
+                "enforcement_attempted": True,
+                "enforcement_result": "HTTP_403_GITHUB_PRO_OR_PUBLIC_REQUIRED",
+                "fallback_policy": (
+                    "private repository; no force-push; no branch deletion; "
+                    "annotated stage/result tags are append-only and never replaced"
+                ),
+            },
         },
         "historical_parent": {
             "remote": "https://github.com/Reimangod/dvg-obs-ceo.git",

@@ -23,5 +23,11 @@ Repository policy:
 - historical submodule and artifacts are read-only;
 - branch/ruleset enforcement status is recorded separately after remote setup.
 
+The GitHub branch-protection and repository-ruleset APIs were attempted for the
+private repository and returned HTTP 403 because the current account plan
+requires GitHub Pro or a public repository for those features. The repository
+remains private. This limitation is retained in the machine ledger; policy is
+therefore procedural and audited rather than server-enforced at S0.
+
 S0 contains provenance and infrastructure evidence only. It contains no
 candidate energy, molecular optimization, or performance outcome.

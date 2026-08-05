@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from typing import Any
 
 from jsonschema import Draft202012Validator
@@ -30,6 +31,21 @@ def audit() -> dict[str, Any]:
     required = ledger["required_imports"]
     parent_root_status = git(ROOT, "status", "--porcelain", "--untracked-files=no")
     submodule_line = git(ROOT, "submodule", "status", "provenance/dvg-obs-ceo")
+    remote = git(ROOT, "remote", "get-url", "origin")
+    remote_observation = json.loads(
+        subprocess.check_output(
+            [
+                "gh",
+                "repo",
+                "view",
+                "Reimangod/v5-matched-work-study",
+                "--json",
+                "visibility,defaultBranchRef,url",
+            ],
+            text=True,
+        )
+    )
+    governance = ledger["repository"]["governance"]
     checks = {
         "schema_valid": not schema_errors,
         "ledger_digest": ledger["ledger_digest"] == _digest_without(ledger, "ledger_digest"),
@@ -45,6 +61,25 @@ def audit() -> dict[str, Any]:
         "historical_not_copied": historical["copied_into_new_artifact_namespace"] is False,
         "namespace_separation": ledger["new_namespaces"]["historical_namespace_overlap"] is False,
         "exclusive_create_policy": ledger["safety"]["overwrite_allowed"] is False,
+        "private_remote": (
+            remote in {
+                "https://github.com/Reimangod/v5-matched-work-study.git",
+                "git@github.com:Reimangod/v5-matched-work-study.git",
+            }
+            and remote_observation["visibility"] == "PRIVATE"
+            and remote_observation["defaultBranchRef"]["name"] == "main"
+        ),
+        "protection_limit_recorded": (
+            governance["enforcement_attempted"] is True
+            and governance["branch_protection_enforced"] is False
+            and governance["tag_ruleset_enforced"] is False
+            and governance["enforcement_result"]
+            == "HTTP_403_GITHUB_PRO_OR_PUBLIC_REQUIRED"
+        ),
+        "fallback_governance_fail_closed": (
+            ledger["safety"]["force_push_allowed"] is False
+            and ledger["safety"]["tag_rewrite_allowed"] is False
+        ),
         "root_tracked_clean_at_audit_start": parent_root_status == "",
         "s1_authorized": ledger["decision"] == "GO_S1" and ledger["next_stage_authorized"] == "S1",
     }
