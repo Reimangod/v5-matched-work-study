@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 from typing import Any
 
 from jsonschema import Draft202012Validator
@@ -56,11 +57,16 @@ def audit() -> dict[str, Any]:
             baseline["historical_replay"]["release_audit"]["passed"] is True
             and all(baseline["historical_replay"]["release_audit"]["checks"].values())
         ),
-        "source_relative_budget": source_relative_budget(
-            source_energy_hartree=-2.0,
-            committed_energy_hartree=-1.99997,
-            total_budget_hartree=0.0001,
-        ) == 0.0000700000000001922,
+        "source_relative_budget": math.isclose(
+            source_relative_budget(
+                source_energy_hartree=-2.0,
+                committed_energy_hartree=-1.99997,
+                total_budget_hartree=0.0001,
+            ),
+            0.00007,
+            rel_tol=0.0,
+            abs_tol=1e-15,
+        ),
         "zero_margin_not_risk_aware": risk_semantics(0.0) == "risk-neutral-zero-uncertainty-margin",
         "fci_firewall_declared": "exact/FCI reference forbidden online"
         in baseline["corrected_runtime_contract"]["energy_budget"],
