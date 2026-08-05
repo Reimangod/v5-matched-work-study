@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 import hashlib
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 from .atomic_artifacts import canonical_json_bytes
 
@@ -90,6 +90,122 @@ class WorkLedger:
         self.events.append(event)
         self.total = self.total.add(delta)
         return event
+
+    def charge(
+        self,
+        operation: str,
+        *,
+        method_id: str,
+        case_id: str,
+        candidate_id: str | None,
+        path_id: str,
+        outcome: str = "completed",
+        cache: str = "not-applicable",
+        units: int = 1,
+        dimension: int | None = None,
+    ) -> WorkEvent:
+        """Charge a registered physical operation through the shared counter API.
+
+        Adapters are not allowed to construct counter deltas themselves.  Keeping
+        the mapping here makes equal operation names mean equal work everywhere.
+        """
+
+        delta = operation_delta(operation, units=units, dimension=dimension)
+        return self.record(
+            method_id=method_id,
+            case_id=case_id,
+            candidate_id=candidate_id,
+            path_id=path_id,
+            operation=operation,
+            outcome=outcome,
+            cache=cache,
+            delta=delta,
+        )
+
+
+OPERATION_COMPONENT = {
+    "source-energy-evaluation": "N_E",
+    "candidate-energy-evaluation": "N_E",
+    "full-gradient-evaluation": "N_G",
+    "gradient-component-evaluation": "N_gradcomp",
+    "hessian-vector-product": "N_HVP",
+    "exact-candidate-attempt": "N_exact",
+    "full-physical-resource-recount": "N_recount",
+    "exact-algebraic-rewrite": "N_rewrite",
+    "unique-search-state-expansion": "N_states",
+    "sequential-round-attempt": "N_rounds",
+}
+
+
+def operation_delta(operation: str, *, units: int = 1, dimension: int | None = None) -> WorkVector:
+    if isinstance(units, bool) or not isinstance(units, int) or units < 0:
+        raise WorkLedgerError("operation units must be a nonnegative integer")
+    if operation == "full-gradient-evaluation":
+        if isinstance(dimension, bool) or not isinstance(dimension, int) or dimension < 0:
+            raise WorkLedgerError("full gradients require a nonnegative dimension")
+        return WorkVector(N_G=units, N_gradcomp=units * dimension)
+    try:
+        field = OPERATION_COMPONENT[operation]
+    except KeyError as error:
+        raise WorkLedgerError(f"unregistered work operation: {operation}") from error
+    return WorkVector(**{field: units})
+
+
+def event_to_dict(event: WorkEvent) -> dict[str, Any]:
+    value = asdict(event)
+    return value
+
+
+def event_from_dict(value: Mapping[str, Any]) -> WorkEvent:
+    delta = WorkVector(**dict(value["delta"]))
+    rebuilt = WorkEvent.create(
+        sequence=int(value["sequence"]),
+        method_id=str(value["method_id"]),
+        case_id=str(value["case_id"]),
+        candidate_id=value.get("candidate_id"),
+        path_id=str(value["path_id"]),
+        operation=str(value["operation"]),
+        outcome=str(value["outcome"]),
+        cache=str(value["cache"]),
+        delta=delta,
+    )
+    if rebuilt.event_id != value["event_id"]:
+        raise WorkLedgerError("raw event digest mismatch")
+    return rebuilt
+
+
+def reconstruct_candidate_energy_evaluations(events: Iterable[WorkEvent]) -> int:
+    ordered = list(events)
+    reconstruct(ordered)
+    return sum(
+        event.delta.N_E
+        for event in ordered
+        if event.operation == "candidate-energy-evaluation"
+    )
+
+
+def raw_ledger_document(
+    *,
+    ledger_id: str,
+    phase: str,
+    cap: WorkVector,
+    events: Iterable[WorkEvent],
+) -> dict[str, Any]:
+    materialized = list(events)
+    total = reconstruct(materialized)
+    result = {
+        "schema": "v5-matched-work.raw-work-ledger.v2",
+        "ledger_id": ledger_id,
+        "phase": phase,
+        "counter_api": "v5_matched_work.work_ledger.WorkLedger.charge",
+        "operation_component": dict(sorted(OPERATION_COMPONENT.items())),
+        "cap": asdict(cap),
+        "events": [event_to_dict(event) for event in materialized],
+        "reconstructed_total": asdict(total),
+        "reconstructed_candidate_energy_evaluations": reconstruct_candidate_energy_evaluations(materialized),
+    }
+    result["ledger_digest"] = hashlib.sha256(canonical_json_bytes(result)).hexdigest()
+    return result
 
 
 def reconstruct(events: Iterable[WorkEvent]) -> WorkVector:
