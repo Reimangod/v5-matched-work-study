@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Reimangod/v5-matched-work-study/schemas/s1-correctness-baseline-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "stage", "status", "version", "historical_replay",
+    "immutable_inputs", "historical_errata", "historical_artifacts_modified",
+    "cases", "corrected_runtime_contract", "change_classification",
+    "release_context", "decision", "next_stage_authorized", "claim_boundary",
+    "paper_measurement_cost", "baseline_digest"
+  ],
+  "properties": {
+    "schema": {"const": "v5-matched-work.s1-correctness-baseline.v1"},
+    "stage": {"const": "S1"},
+    "status": {"const": "COMPLETE"},
+    "version": {"const": "correctness-baseline-v1"},
+    "historical_replay": {"type": "object"},
+    "immutable_inputs": {"type": "array", "minItems": 3},
+    "historical_errata": {"type": "array", "minItems": 1},
+    "historical_artifacts_modified": {"const": false},
+    "cases": {"type": "array", "minItems": 4, "maxItems": 4},
+    "corrected_runtime_contract": {"type": "object"},
+    "change_classification": {"type": "object"},
+    "release_context": {"type": "object"},
+    "decision": {"enum": ["GO_S2", "NO_GO_S1"]},
+    "next_stage_authorized": {"enum": ["S2", "NONE"]},
+    "claim_boundary": {"type": "string", "minLength": 1},
+    "paper_measurement_cost": {"type": "null"},
+    "baseline_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}
