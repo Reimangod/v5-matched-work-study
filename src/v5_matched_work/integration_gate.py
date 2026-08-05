@@ -53,7 +53,7 @@ def _identity(prefix: str, value: Any) -> str:
     return prefix + hashlib.sha256(canonical_json_bytes(value)).hexdigest()
 
 
-def _source(case_id: str) -> tuple[ImmutableSource, dict[str, Any]]:
+def _source(case_id: str, *, gate_version: str = "v2") -> tuple[ImmutableSource, dict[str, Any]]:
     if case_id == "toy-structural-integration":
         coefficients = (0.3, -0.2, 0.1)
         indices = (1, 2, 3)
@@ -74,7 +74,7 @@ def _source(case_id: str) -> tuple[ImmutableSource, dict[str, Any]]:
     })).hexdigest()
     source = ImmutableSource(
         _identity("state-v1:", {"case_id": case_id, "structure_digest": structure_digest}),
-        _identity("problem-v1:", {"case_id": case_id, "gate": "adapter-integration-v2"}),
+        _identity("problem-v1:", {"case_id": case_id, "gate": f"adapter-integration-{gate_version}"}),
         coefficients,
         indices,
         structure_digest,
@@ -82,18 +82,21 @@ def _source(case_id: str) -> tuple[ImmutableSource, dict[str, Any]]:
     return source, provenance
 
 
-def build() -> dict[str, Any]:
+def build(*, counter_semantics: str = "v2") -> dict[str, Any]:
+    is_v3 = counter_semantics == "v3-unique-states"
     backend = FixtureBackend()
     records: list[dict[str, Any]] = []
     all_events = []
     cases = ("toy-structural-integration", *CHECKPOINTS)
     for case_id in cases:
-        source, provenance = _source(case_id)
+        source, provenance = _source(case_id, gate_version="v3" if is_v3 else "v2")
         for method_id in PRIMARY_METHODS:
             first, ledger = run_comparator(method_id, case_id=case_id, source=source,
-                                           backend=backend, cap=CAP)
+                                           backend=backend, cap=CAP,
+                                           counter_semantics=counter_semantics)
             second, second_ledger = run_comparator(method_id, case_id=case_id, source=source,
-                                                   backend=backend, cap=CAP)
+                                                   backend=backend, cap=CAP,
+                                                   counter_semantics=counter_semantics)
             total = reconstruct(ledger.events)
             records.append({
                 "case_id": case_id,
@@ -110,10 +113,11 @@ def build() -> dict[str, Any]:
             })
             all_events.extend(ledger.events)
     tiny_cap_failed_closed = False
-    source, _ = _source("toy-structural-integration")
+    source, _ = _source("toy-structural-integration", gate_version="v3" if is_v3 else "v2")
     try:
         run_comparator(PRIMARY_METHODS[3], case_id="toy-cap", source=source,
-                       backend=backend, cap=WorkVector(N_rounds=1))
+                       backend=backend, cap=WorkVector(N_rounds=1),
+                       counter_semantics=counter_semantics)
     except WorkLedgerError:
         tiny_cap_failed_closed = True
     checks = {
@@ -129,10 +133,27 @@ def build() -> dict[str, Any]:
         "all_counter_fields_reconstructable": all(set(record["work"]) == set(FIELDS) for record in records),
         "no_molecular_candidate_energy_executed": all(not record["source_provenance"]["candidate_energy_execution"] for record in records),
     }
+    if is_v3:
+        expected_states = {
+            "structural-magnitude-pruning": 2,
+            "v4.1-one-shot-joint-compression": 2,
+            "v5-sequential-without-rebuilding": 2,
+            "v5-sequential-with-rebuilding": 5,
+        }
+        checks.update({
+            "duplicates_do_not_increment_n_states": all(
+                record["work"]["N_states"] == expected_states[record["method_id"]]
+                for record in records if record["method_id"] in expected_states
+            ),
+            "duplicate_detection_is_zero_delta_evidence": all(
+                event.delta == WorkVector()
+                for event in all_events if event.operation == "duplicate-detection"
+            ) and any(event.operation == "duplicate-detection" for event in all_events),
+        })
     failures = [name for name, passed in checks.items() if not passed]
     result = {
-        "schema": "v5-matched-work.adapter-integration-gate.v2",
-        "stage": "S4_V2_INTEGRATION",
+        "schema": "v5-matched-work.adapter-integration-gate.v3" if is_v3 else "v5-matched-work.adapter-integration-gate.v2",
+        "stage": "S4_V3_INTEGRATION" if is_v3 else "S4_V2_INTEGRATION",
         "status": "PASS" if not failures else "FAIL",
         "checks": checks,
         "failed_checks": failures,

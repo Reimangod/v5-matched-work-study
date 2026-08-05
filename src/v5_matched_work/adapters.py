@@ -95,6 +95,7 @@ def _catalog(
     method_id: str,
     case_id: str,
     parent_state_id: str,
+    count_duplicate_states: bool,
 ) -> tuple[Candidate, ...]:
     values = tuple(backend.catalog(parent_state_id))
     unique: list[Candidate] = []
@@ -110,6 +111,16 @@ def _catalog(
             operation="exact-algebraic-rewrite",
             outcome=outcome,
         )
+        if outcome == "duplicate" and not count_duplicate_states:
+            ledger.record_evidence(
+                "duplicate-detection",
+                method_id=method_id,
+                case_id=case_id,
+                candidate_id=candidate.candidate_id,
+                path_id=parent_state_id,
+                outcome="duplicate",
+            )
+            continue
         _charge(
             ledger,
             method_id=method_id,
@@ -157,9 +168,13 @@ def run_comparator(
     backend: AdapterBackend,
     cap: WorkVector,
     maximum_rounds: int = 2,
+    counter_semantics: str = "v2",
 ) -> tuple[AdapterResult, WorkLedger]:
     if method_id not in PRIMARY_METHODS:
         raise AdapterError("unregistered comparator")
+    if counter_semantics not in {"v2", "v3-unique-states"}:
+        raise AdapterError("unregistered counter semantics")
+    count_duplicate_states = counter_semantics == "v2"
     before = _source_digest(source)
     ledger = WorkLedger(cap)
     accepted: list[str] = []
@@ -178,7 +193,8 @@ def run_comparator(
         stop = "same-structure-complete"
     elif method_id == "structural-magnitude-pruning":
         catalog = sorted(_catalog(backend, ledger, method_id=method_id, case_id=case_id,
-                                  parent_state_id=source_state), key=lambda item: (item.magnitude_rank, item.candidate_id))
+                                  parent_state_id=source_state,
+                                  count_duplicate_states=count_duplicate_states), key=lambda item: (item.magnitude_rank, item.candidate_id))
         if catalog:
             outcome = _evaluate(backend, ledger, method_id=method_id, case_id=case_id,
                                 parent_state_id=source_state, candidate=catalog[0])
@@ -189,7 +205,8 @@ def run_comparator(
         _charge(ledger, method_id=method_id, case_id=case_id, candidate_id=None,
                 path_id=source_state, operation="sequential-round-attempt")
         for candidate in _catalog(backend, ledger, method_id=method_id, case_id=case_id,
-                                  parent_state_id=source_state):
+                                  parent_state_id=source_state,
+                                  count_duplicate_states=count_duplicate_states):
             outcome = _evaluate(backend, ledger, method_id=method_id, case_id=case_id,
                                 parent_state_id=source_state, candidate=candidate)
             if outcome.accepted and outcome.final_state_id:
@@ -199,14 +216,16 @@ def run_comparator(
         rebuild = method_id == "v5-sequential-with-rebuilding"
         parent_state = source_state
         original = _catalog(backend, ledger, method_id=method_id, case_id=case_id,
-                            parent_state_id=source_state)
+                            parent_state_id=source_state,
+                            count_duplicate_states=count_duplicate_states)
         stop = "maximum-rounds"
         attempted: set[str] = set()
         for _ in range(maximum_rounds):
             _charge(ledger, method_id=method_id, case_id=case_id, candidate_id=None,
                     path_id=parent_state, operation="sequential-round-attempt")
             catalog = (_catalog(backend, ledger, method_id=method_id, case_id=case_id,
-                                parent_state_id=parent_state) if rebuild else original)
+                                parent_state_id=parent_state,
+                                count_duplicate_states=count_duplicate_states) if rebuild else original)
             candidate = next((item for item in catalog if item.candidate_id not in attempted), None)
             if candidate is None:
                 stop = "no-new-candidate"
