@@ -18,6 +18,14 @@ shared-counter orchestration layer, but the strict pre-S6 audit correctly
 rejects it as a substitute for concrete pinned molecular backends. S6–S14
 therefore remain unexecuted and not authorized.
 
+The subsequent counter audit is resolved in
+[`docs/V3_COUNTER_READINESS_NO_GO.md`](docs/V3_COUNTER_READINESS_NO_GO.md).
+V3 excludes duplicate identities from `N_states`, labels historical aggregates
+as normalized rather than raw events, implements the future segment-chain
+contract, and moves all molecular checks into one authoritative gate before
+S5. Because actual kernel events and concrete molecular executors are still
+absent, no S5-v3 freeze exists and S5–S14 remain `NOT_AUTHORIZED`.
+
 ## S0 reproduction
 
 ```bash
@@ -35,6 +43,10 @@ uv run python -m v5_matched_work.s4_build_v2 --verify-only
 uv run python -m v5_matched_work.s5_freeze_v2 --verify-only
 uv run python -m v5_matched_work.strict_pre_s6_v2 --verify-only
 uv run python -m v5_matched_work.closure_audit_v2 --verify-only
+uv run python -m v5_matched_work.s3_build_v3 --verify-only
+uv run python -m v5_matched_work.s4_build_v3 --verify-only
+uv run python -m v5_matched_work.authoritative_pre_s5_v3 --verify-only
+uv run python -m v5_matched_work.closure_audit_v3 --verify-only
 uv run pytest -q
 ```
 
