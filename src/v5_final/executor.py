@@ -17,18 +17,22 @@ from v5_matched_work.atomic_artifacts import canonical_json_bytes
 from .architecture_state import ArchitectureState, RESOURCE_FIELDS
 from .candidate_catalog import CandidateCatalog, CatalogCandidate
 from .certifier import certify_candidate
+from .failure_matrix import ProductionCheckpoints, run_control_plane_cartesian_matrix
 from .frozen_queue import QueueItem, freeze_queue, verify_frozen_queue
 from .identities import (
     CandidateIntent,
     ExecutionRequest,
     GeneratorSemantic,
+    IntentAlias,
     NativeGateSemantic,
+    PhysicalStateEvaluationIndex,
     ProposedPhysicalState,
 )
 from .pareto_selector import select_prediction
 from .predictor import predict_structural
+from .production_bundle import build_production_bundle
 from .s0_successor import ROOT
-from .s3_smoke_authorization_v3 import audit as audit_smoke_authorization
+from .s3_smoke_authorization_v4 import audit as audit_smoke_authorization
 from .scientific_values import TaggedScientificValue
 from .semantic_contract import ScientificValueDelta, StateDelta
 from .semantic_contract_v2 import ResourceDelta, SemanticDelta, WorkDelta, WORK_COMPONENTS
@@ -221,12 +225,15 @@ class ProductionExecutor:
 
     def run_registered_h2_smoke(self) -> dict[str, Any]:
         if not all(audit_smoke_authorization().values()):
-            raise ProductionExecutorError("S3-v2 did not authorize the S4 smoke")
+            raise ProductionExecutorError("S3-v4 did not authorize the S4 smoke")
         if any(os.environ.get(name) != value for name, value in REQUIRED_THREADS.items()):
             raise ProductionExecutorError("single-thread deterministic environment is not active")
         authorization = json.loads(
-            (ROOT / "artifacts/v5-final/s3/s4-smoke-authorization-v3.json").read_text()
+            (ROOT / "artifacts/v5-final/s3/s4-smoke-authorization-v4.json").read_text()
         )
+        production_bundle = build_production_bundle()
+        if authorization["production_bundle_digest"] != production_bundle["bundle_digest"]:
+            raise ProductionExecutorError("S4 authorization does not bind the current code bundle")
         cap = WorkDelta(**authorization["work_cap"])
         ledger = IntegratedWorkLedger(
             cap=cap,
@@ -235,6 +242,7 @@ class ProductionExecutor:
         )
         independent_raw = WorkDelta()
         current_source_digest = "0" * 64
+        checkpoints = ProductionCheckpoints()
 
         def record_host(
             event_type: SemanticEventType,
@@ -326,6 +334,7 @@ class ProductionExecutor:
             circuit_digest=inspect["source"]["circuit_digest"],
         )
         current_source_digest = source.source_digest
+        checkpoints.checkpoint("SOURCE_LOADED")
         candidate_physical = _physical_state(inspect, inspect["candidate"])
         intent = CandidateIntent(
             source_block=inspect["source"]["block_order"][0],
@@ -345,14 +354,45 @@ class ProductionExecutor:
             inspect["candidate"]["circuit_digest"],
             _resource_values(inspect["candidate"]["resources"]),
         )
-        record_host(
-            SemanticEventType.CANDIDATE_GENERATED,
-            "s4-h2-source-prequeue",
-            work=WorkDelta(candidate_generations=1),
-            evidence={"raw_counter_source": "candidate_catalog.build", "actual_circuit": True},
-            candidate_intent_id=candidate.candidate_intent_id,
-            state_id=candidate.proposed_physical_state_id,
+        duplicate_intent = CandidateIntent(
+            source_block=inspect["source"]["block_order"][0],
+            transformation_family="equivalent-coefficient-alias-smoke",
+            target_family="pinned-upstream-CEO-circuit",
+            candidate_provenance={
+                "source_artifact_sha256": source_artifact_sha,
+                "coefficient_delta_decimal": "0.01",
+                "purpose": "S4-production-deduplication-proof",
+                "independent_proposal_path": True,
+            },
+            generation_path=("source-load", "independent-alias-proposal", "bounded-smoke-catalog"),
         )
+        duplicate_candidate = CatalogCandidate(
+            duplicate_intent,
+            candidate_physical,
+            tuple(inspect["candidate"]["coefficient_bytes"]),
+            inspect["candidate"]["circuit_digest"],
+            _resource_values(inspect["candidate"]["resources"]),
+        )
+        for generated in (candidate, duplicate_candidate):
+            record_host(
+                SemanticEventType.CANDIDATE_GENERATED,
+                "s4-h2-source-prequeue",
+                work=WorkDelta(candidate_generations=1),
+                evidence={
+                    "raw_counter_source": "candidate_catalog.build",
+                    "actual_circuit": True,
+                },
+                candidate_intent_id=generated.candidate_intent_id,
+                state_id=generated.proposed_physical_state_id,
+            )
+            record_host(
+                SemanticEventType.REWRITE_VERIFIED,
+                "s4-h2-source-prequeue",
+                work=WorkDelta(rewrite_verifications=1),
+                evidence={"raw_counter_source": "actual-circuit-identity-verification"},
+                candidate_intent_id=generated.candidate_intent_id,
+                state_id=generated.proposed_physical_state_id,
+            )
         record_host(
             SemanticEventType.SEARCH_STATE_EXPANDED,
             "s4-h2-source-prequeue",
@@ -362,14 +402,19 @@ class ProductionExecutor:
             state_id=candidate.proposed_physical_state_id,
         )
         record_host(
-            SemanticEventType.REWRITE_VERIFIED,
+            SemanticEventType.CANDIDATE_DEDUPLICATED,
             "s4-h2-source-prequeue",
-            work=WorkDelta(rewrite_verifications=1),
-            evidence={"raw_counter_source": "actual-circuit-identity-verification"},
-            candidate_intent_id=candidate.candidate_intent_id,
-            state_id=candidate.proposed_physical_state_id,
+            evidence={
+                "canonical_candidate_intent_id": candidate.candidate_intent_id,
+                "alias_candidate_intent_id": duplicate_candidate.candidate_intent_id,
+                "deduplication_key": candidate.proposed_physical_state_id,
+            },
+            candidate_intent_id=duplicate_candidate.candidate_intent_id,
+            state_id=duplicate_candidate.proposed_physical_state_id,
         )
-        catalog = CandidateCatalog.build(source.source_digest, (candidate,))
+        catalog = CandidateCatalog.build(
+            source.source_digest, (candidate, duplicate_candidate)
+        )
         record_host(
             SemanticEventType.CATALOG_BUILT,
             "s4-h2-source-prequeue",
@@ -378,6 +423,7 @@ class ProductionExecutor:
                 "unique_physical_state_count": catalog.unique_physical_state_count,
             },
         )
+        checkpoints.checkpoint("CATALOG_BUILT")
         prediction = predict_structural(source, candidate)
         selected = select_prediction((prediction,))
         record_host(
@@ -396,7 +442,7 @@ class ProductionExecutor:
             work_profile=authorization["work_cap"],
             energy_budget_hartree="0.0001",
             stationarity_threshold="0.000001",
-            protocol_digest=authorization["authorization_digest"],
+            protocol_digest=production_bundle["bundle_digest"],
             environment_digest=environment_digest,
         )
         queue_item = QueueItem(
@@ -406,7 +452,7 @@ class ProductionExecutor:
             source.source_digest,
             catalog.catalog_digest,
         )
-        frozen = freeze_queue((queue_item,), protocol_digest=authorization["authorization_digest"])
+        frozen = freeze_queue((queue_item,), protocol_digest=production_bundle["bundle_digest"])
         verify_frozen_queue(frozen)
         record_host(
             SemanticEventType.QUEUE_FROZEN,
@@ -416,6 +462,27 @@ class ProductionExecutor:
             candidate_intent_id=candidate.candidate_intent_id,
             state_id=candidate.proposed_physical_state_id,
         )
+        checkpoints.checkpoint("QUEUE_FROZEN")
+        evaluation_index = PhysicalStateEvaluationIndex()
+        for alias_candidate in (candidate, duplicate_candidate):
+            generation_work_digest = hashlib.sha256(
+                canonical_json_bytes(
+                    {
+                        "candidate_intent_id": alias_candidate.candidate_intent_id,
+                        "candidate_generations": 1,
+                        "rewrite_verifications": 1,
+                    }
+                )
+            ).hexdigest()
+            evaluation_index.add_alias(
+                IntentAlias(
+                    alias_candidate.candidate_intent_id,
+                    alias_candidate.proposed_physical_state_id,
+                    alias_candidate.intent.candidate_provenance,
+                    alias_candidate.intent.generation_path,
+                    generation_work_digest,
+                )
+            )
         transaction = ArchitectureTransaction(source)
         execute_callback = bridge_callback(queue_item.queue_item_id)
         execute = self.bridge.run(
@@ -432,6 +499,21 @@ class ProductionExecutor:
         )
         if asdict(execute_callback.bridge_total()) != execute["raw_counter"]:  # type: ignore[attr-defined]
             raise ProductionExecutorError("execute bridge raw stream and final counter differ")
+        execution_segment_digest = hashlib.sha256(
+            canonical_json_bytes(
+                {
+                    "execution_request_id": request.execution_request_id,
+                    "raw_counter": execute["raw_counter"],
+                    "energy_hartree": execute["energy_hartree"],
+                    "statevector_digest": execute["statevector_digest"],
+                }
+            )
+        ).hexdigest()
+        if not evaluation_index.bind_evaluation(
+            candidate.proposed_physical_state_id, execution_segment_digest
+        ):
+            raise ProductionExecutorError("unique physical state was evaluated more than once")
+        checkpoints.checkpoint("CANDIDATE_EXECUTED")
         final_physical = _physical_state(inspect, execute["final"])
         final_state = ArchitectureState(
             problem_id=inspect["problem_id"],
@@ -455,6 +537,7 @@ class ProductionExecutor:
             energy_budget_hartree=request.energy_budget_hartree,
             stationarity_threshold=request.stationarity_threshold,
         )
+        checkpoints.checkpoint("CANDIDATE_CERTIFIED")
         final_value = TaggedScientificValue.available(
             quantity="candidate_energy", unit="hartree", value=final_state.energy_hartree
         )
@@ -522,6 +605,7 @@ class ProductionExecutor:
             )
             terminal = "STRUCTURALLY_REJECTED"
             terminal_state = source
+        checkpoints.checkpoint("STATE_COMMITTED_OR_ROLLED_BACK")
         rebuilt_catalog = CandidateCatalog.build(
             terminal_state.source_digest,
             (
@@ -570,6 +654,7 @@ class ProductionExecutor:
             },
             execution_request_id=request.execution_request_id,
         )
+        checkpoints.checkpoint("CATALOG_REBUILT")
         record_host(
             SemanticEventType.TERMINAL_REACHED,
             queue_item.queue_item_id,
@@ -579,6 +664,7 @@ class ProductionExecutor:
             state_id=terminal_state.proposed_physical_state_id,
         )
         document = ledger.close()
+        checkpoints.checkpoint("LEDGER_CLOSED")
         summary = release_summary(document)
         reconciliation = reconcile(
             independent_raw_counter=independent_raw,
@@ -608,8 +694,11 @@ class ProductionExecutor:
                 "source_digest_after": rollback.source_digest_after,
                 "exact": rollback.exact,
             }
+        control_plane_failure_matrix = run_control_plane_cartesian_matrix(
+            source, artifact_directory=ROOT / "artifacts/v5-final/s4"
+        )
         result: dict[str, Any] = {
-            "schema": "v5-final.s4-h2-production-smoke.v1",
+            "schema": "v5-final.s4-h2-production-smoke.v2",
             "classification": "bounded infrastructure smoke; not performance evidence",
             "source_artifact": {
                 "path": str(SOURCE_ARTIFACT.relative_to(ROOT)),
@@ -623,10 +712,16 @@ class ProductionExecutor:
                 "unique_physical_state_count": catalog.unique_physical_state_count,
                 "catalog_digest": catalog.catalog_digest,
                 "candidate_intent_id": candidate.candidate_intent_id,
+                "candidate_intent_ids": [
+                    item.candidate_intent_id for item in catalog.candidates
+                ],
                 "proposed_physical_state_id": candidate.proposed_physical_state_id,
             },
+            "physical_state_evaluation_index": evaluation_index.document(),
+            "production_bundle": production_bundle,
             "frozen_queue": frozen,
             "execution_request_id": request.execution_request_id,
+            "execution_request_protocol_digest": request.protocol_digest,
             "optimizer": execute["optimizer"],
             "certification": asdict(certification),
             "terminal_status": terminal,
@@ -637,6 +732,8 @@ class ProductionExecutor:
             "release_summary": summary,
             "reconciliation": reconciliation,
             "transaction_failure_probes": transaction_failure_probes,
+            "control_plane_failure_matrix": control_plane_failure_matrix,
+            "production_checkpoints": checkpoints.visited,
             "claim_boundary": (
                 "One registered H2 production-path smoke. Energy values verify "
                 "executor semantics only and cannot support method-performance claims."
