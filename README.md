@@ -26,6 +26,14 @@ contract, and moves all molecular checks into one authoritative gate before
 S5. Because actual kernel events and concrete molecular executors are still
 absent, no S5-v3 freeze exists and S5–S14 remain `NOT_AUTHORIZED`.
 
+The semantic-ledger audit is addressed in
+[`docs/V4_SEMANTIC_LEDGER_NO_GO.md`](docs/V4_SEMANTIC_LEDGER_NO_GO.md). V4
+deduplicates by canonical proposed state rather than candidate ID, validates
+operation/delta semantics, and requires a nonempty frozen queue's count,
+canonical digest, and artifact SHA-256 in every production chain. No S5-v4
+queue exists, so production candidate-energy count is `null` and the gate still
+fails before S5.
+
 ## S0 reproduction
 
 ```bash
@@ -47,6 +55,10 @@ uv run python -m v5_matched_work.s3_build_v3 --verify-only
 uv run python -m v5_matched_work.s4_build_v3 --verify-only
 uv run python -m v5_matched_work.authoritative_pre_s5_v3 --verify-only
 uv run python -m v5_matched_work.closure_audit_v3 --verify-only
+uv run python -m v5_matched_work.s3_build_v4 --verify-only
+uv run python -m v5_matched_work.s4_build_v4 --verify-only
+uv run python -m v5_matched_work.authoritative_pre_s5_v4 --verify-only
+uv run python -m v5_matched_work.closure_audit_v4 --verify-only
 uv run pytest -q
 ```
 
