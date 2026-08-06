@@ -96,12 +96,14 @@ def _catalog(
     case_id: str,
     parent_state_id: str,
     count_duplicate_states: bool,
+    deduplicate_by_proposed_state: bool,
 ) -> tuple[Candidate, ...]:
     values = tuple(backend.catalog(parent_state_id))
     unique: list[Candidate] = []
     seen: set[str] = set()
     for candidate in values:
-        outcome = "duplicate" if candidate.candidate_id in seen else "completed"
+        canonical_key = candidate.proposed_state_id if deduplicate_by_proposed_state else candidate.candidate_id
+        outcome = "duplicate" if canonical_key in seen else "completed"
         _charge(
             ledger,
             method_id=method_id,
@@ -130,9 +132,10 @@ def _catalog(
             operation="unique-search-state-expansion",
             outcome=outcome,
         )
-        if candidate.candidate_id not in seen:
-            seen.add(candidate.candidate_id)
-            unique.append(candidate)
+        if outcome == "duplicate":
+            continue
+        seen.add(canonical_key)
+        unique.append(candidate)
     return tuple(unique)
 
 
@@ -172,9 +175,10 @@ def run_comparator(
 ) -> tuple[AdapterResult, WorkLedger]:
     if method_id not in PRIMARY_METHODS:
         raise AdapterError("unregistered comparator")
-    if counter_semantics not in {"v2", "v3-unique-states"}:
+    if counter_semantics not in {"v2", "v3-unique-states", "v4-canonical-proposed-states"}:
         raise AdapterError("unregistered counter semantics")
     count_duplicate_states = counter_semantics == "v2"
+    deduplicate_by_proposed_state = counter_semantics == "v4-canonical-proposed-states"
     before = _source_digest(source)
     ledger = WorkLedger(cap)
     accepted: list[str] = []
@@ -194,7 +198,8 @@ def run_comparator(
     elif method_id == "structural-magnitude-pruning":
         catalog = sorted(_catalog(backend, ledger, method_id=method_id, case_id=case_id,
                                   parent_state_id=source_state,
-                                  count_duplicate_states=count_duplicate_states), key=lambda item: (item.magnitude_rank, item.candidate_id))
+                                  count_duplicate_states=count_duplicate_states,
+                                  deduplicate_by_proposed_state=deduplicate_by_proposed_state), key=lambda item: (item.magnitude_rank, item.candidate_id))
         if catalog:
             outcome = _evaluate(backend, ledger, method_id=method_id, case_id=case_id,
                                 parent_state_id=source_state, candidate=catalog[0])
@@ -206,7 +211,8 @@ def run_comparator(
                 path_id=source_state, operation="sequential-round-attempt")
         for candidate in _catalog(backend, ledger, method_id=method_id, case_id=case_id,
                                   parent_state_id=source_state,
-                                  count_duplicate_states=count_duplicate_states):
+                                  count_duplicate_states=count_duplicate_states,
+                                  deduplicate_by_proposed_state=deduplicate_by_proposed_state):
             outcome = _evaluate(backend, ledger, method_id=method_id, case_id=case_id,
                                 parent_state_id=source_state, candidate=candidate)
             if outcome.accepted and outcome.final_state_id:
@@ -217,7 +223,8 @@ def run_comparator(
         parent_state = source_state
         original = _catalog(backend, ledger, method_id=method_id, case_id=case_id,
                             parent_state_id=source_state,
-                            count_duplicate_states=count_duplicate_states)
+                            count_duplicate_states=count_duplicate_states,
+                            deduplicate_by_proposed_state=deduplicate_by_proposed_state)
         stop = "maximum-rounds"
         attempted: set[str] = set()
         for _ in range(maximum_rounds):
@@ -225,7 +232,8 @@ def run_comparator(
                     path_id=parent_state, operation="sequential-round-attempt")
             catalog = (_catalog(backend, ledger, method_id=method_id, case_id=case_id,
                                 parent_state_id=parent_state,
-                                count_duplicate_states=count_duplicate_states) if rebuild else original)
+                                count_duplicate_states=count_duplicate_states,
+                                deduplicate_by_proposed_state=deduplicate_by_proposed_state) if rebuild else original)
             candidate = next((item for item in catalog if item.candidate_id not in attempted), None)
             if candidate is None:
                 stop = "no-new-candidate"

@@ -49,6 +49,18 @@ class FixtureBackend(AdapterBackend):
         return Evaluation(True, "accepted-v2:" + digest, "accepted")
 
 
+class SemanticDuplicateFixtureBackend(FixtureBackend):
+    """Uses different candidate IDs for the same canonical proposed state."""
+
+    def catalog(self, parent_state_id: str):
+        values = tuple(super().catalog(parent_state_id))
+        if parent_state_id.startswith("accepted-v2:"):
+            first = values[0]
+            return (first, Candidate(first.candidate_id + "-alias", first.proposed_state_id, first.magnitude_rank))
+        first, _, rejected = values
+        return (first, Candidate("candidate-a-alias", first.proposed_state_id, first.magnitude_rank), rejected)
+
+
 def _identity(prefix: str, value: Any) -> str:
     return prefix + hashlib.sha256(canonical_json_bytes(value)).hexdigest()
 
@@ -84,12 +96,13 @@ def _source(case_id: str, *, gate_version: str = "v2") -> tuple[ImmutableSource,
 
 def build(*, counter_semantics: str = "v2") -> dict[str, Any]:
     is_v3 = counter_semantics == "v3-unique-states"
-    backend = FixtureBackend()
+    is_v4 = counter_semantics == "v4-canonical-proposed-states"
+    backend = SemanticDuplicateFixtureBackend() if is_v4 else FixtureBackend()
     records: list[dict[str, Any]] = []
     all_events = []
     cases = ("toy-structural-integration", *CHECKPOINTS)
     for case_id in cases:
-        source, provenance = _source(case_id, gate_version="v3" if is_v3 else "v2")
+        source, provenance = _source(case_id, gate_version="v4" if is_v4 else ("v3" if is_v3 else "v2"))
         for method_id in PRIMARY_METHODS:
             first, ledger = run_comparator(method_id, case_id=case_id, source=source,
                                            backend=backend, cap=CAP,
@@ -113,7 +126,7 @@ def build(*, counter_semantics: str = "v2") -> dict[str, Any]:
             })
             all_events.extend(ledger.events)
     tiny_cap_failed_closed = False
-    source, _ = _source("toy-structural-integration", gate_version="v3" if is_v3 else "v2")
+    source, _ = _source("toy-structural-integration", gate_version="v4" if is_v4 else ("v3" if is_v3 else "v2"))
     try:
         run_comparator(PRIMARY_METHODS[3], case_id="toy-cap", source=source,
                        backend=backend, cap=WorkVector(N_rounds=1),
@@ -133,7 +146,7 @@ def build(*, counter_semantics: str = "v2") -> dict[str, Any]:
         "all_counter_fields_reconstructable": all(set(record["work"]) == set(FIELDS) for record in records),
         "no_molecular_candidate_energy_executed": all(not record["source_provenance"]["candidate_energy_execution"] for record in records),
     }
-    if is_v3:
+    if is_v3 or is_v4:
         expected_states = {
             "structural-magnitude-pruning": 2,
             "v4.1-one-shot-joint-compression": 2,
@@ -150,10 +163,15 @@ def build(*, counter_semantics: str = "v2") -> dict[str, Any]:
                 for event in all_events if event.operation == "duplicate-detection"
             ) and any(event.operation == "duplicate-detection" for event in all_events),
         })
+    if is_v4:
+        checks["different_candidate_ids_same_proposed_state_deduplicated"] = any(
+            event.operation == "duplicate-detection" and event.candidate_id and event.candidate_id.endswith("alias")
+            for event in all_events
+        )
     failures = [name for name, passed in checks.items() if not passed]
     result = {
-        "schema": "v5-matched-work.adapter-integration-gate.v3" if is_v3 else "v5-matched-work.adapter-integration-gate.v2",
-        "stage": "S4_V3_INTEGRATION" if is_v3 else "S4_V2_INTEGRATION",
+        "schema": "v5-matched-work.adapter-integration-gate.v4" if is_v4 else ("v5-matched-work.adapter-integration-gate.v3" if is_v3 else "v5-matched-work.adapter-integration-gate.v2"),
+        "stage": "S4_V4_INTEGRATION" if is_v4 else ("S4_V3_INTEGRATION" if is_v3 else "S4_V2_INTEGRATION"),
         "status": "PASS" if not failures else "FAIL",
         "checks": checks,
         "failed_checks": failures,
