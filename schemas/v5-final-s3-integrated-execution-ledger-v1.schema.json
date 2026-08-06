@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Reimangod/v5-matched-work-study/schemas/v5-final-s3-integrated-execution-ledger-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "protocol_id", "stage", "status", "semantic_event_types",
+    "work_components", "atomic_path", "posthoc_log_assembly_allowed",
+    "reconciliation_requirement", "synthetic_all_component_probe",
+    "academic_integrity", "systems_safety", "remaining_s4_obligations",
+    "authorization", "claim_boundary", "decision", "contract_digest"
+  ],
+  "properties": {
+    "schema": {"const": "v5-final.s3-integrated-execution-ledger.v1"},
+    "protocol_id": {"const": "sequential-rebuilding-v1"},
+    "stage": {"const": "S3"},
+    "status": {"const": "COMPLETE_NOT_PRODUCTION_EXECUTOR_BOUND"},
+    "semantic_event_types": {"type": "array", "minItems": 16, "uniqueItems": true},
+    "work_components": {"type": "array", "minItems": 11, "maxItems": 11, "uniqueItems": true},
+    "atomic_path": {"type": "string", "minLength": 1},
+    "posthoc_log_assembly_allowed": {"const": false},
+    "reconciliation_requirement": {"type": "string", "minLength": 1},
+    "synthetic_all_component_probe": {
+      "type": "object",
+      "required": ["work_total", "independent_raw_counter", "event_count", "reconciliation_checks", "all_components_nonzero", "probe_classification"],
+      "properties": {
+        "all_components_nonzero": {"const": true},
+        "probe_classification": {"const": "synthetic infrastructure; not molecular evidence"}
+      }
+    },
+    "academic_integrity": {"type": "object"},
+    "systems_safety": {"type": "object"},
+    "remaining_s4_obligations": {"type": "array", "minItems": 4, "uniqueItems": true},
+    "authorization": {
+      "type": "object",
+      "required": ["next_stage", "performance_experiment", "candidate_molecular_energy_evaluation", "s5_freeze"],
+      "properties": {
+        "next_stage": {"const": "S4"},
+        "performance_experiment": {"const": "NOT_AUTHORIZED"},
+        "candidate_molecular_energy_evaluation": {"const": "NOT_AUTHORIZED"},
+        "s5_freeze": {"const": "NOT_AUTHORIZED"}
+      }
+    },
+    "claim_boundary": {"type": "string", "minLength": 1},
+    "decision": {"const": "GO_S4_ONLY"},
+    "contract_digest": {"pattern": "^[0-9a-f]{64}$"}
+  }
+}
