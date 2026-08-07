@@ -84,10 +84,9 @@ def _queue_state() -> dict[str, Any]:
     ledger = json.loads(
         (ROOT / "artifacts/v5-final/s5/development-ledger-root-v3.json").read_text()
     )
-    queues = sorted(
-        str(path.relative_to(ROOT))
-        for path in (ROOT / "artifacts/v5-final").rglob("*queue*.json")
-    )
+    # MB5.1 is a historical stage snapshot.  Later additive queues must not
+    # retroactively change its deterministic rebuild.
+    queues = ["artifacts/v5-final/s5/development-queue-v3.json"]
     return {
         "expected_count": queue["expected_queue_count"],
         "not_started_count": sum(

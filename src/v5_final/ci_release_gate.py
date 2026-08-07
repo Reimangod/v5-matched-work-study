@@ -18,6 +18,7 @@ from .mb4_2_owner_protocol_freeze import audit as audit_mb4_2
 from .mb4_fail_closed import audit as audit_mb4
 from .mb5_outcome_free_executor_audit import audit as audit_mb5
 from .mb5_1_production_backend_audit import audit as audit_mb5_1
+from .mb6_queue_freeze import FREEZE_OUTPUT as MB6_OUTPUT, audit as audit_mb6
 from .p0_preexecution_audit import audit as audit_p0
 from .pre_calibration_gate import audit as audit_pre_calibration
 from .s0_documentation_amendment import audit as audit_documentation
@@ -58,6 +59,7 @@ def build() -> dict[str, Any]:
     mb5 = json.loads(mb5_path.read_text())
     mb5_1 = json.loads(mb5_1_path.read_text())
     p0 = json.loads(p0_path.read_text())
+    mb6 = json.loads(MB6_OUTPUT.read_text())
     queue_artifacts = sorted(
         str(path.relative_to(ROOT))
         for path in (ROOT / "artifacts/v5-final").rglob("*queue*.json")
@@ -76,6 +78,7 @@ def build() -> dict[str, Any]:
         "mb5_outcome_free_executors": audit_mb5(),
         "p0_preexecution_capacity": audit_p0(),
         "mb5_1_production_backends": audit_mb5_1(),
+        "mb6_outcome_blind_queue_freeze": audit_mb6(),
     }
     checks = {
         "all_audits_pass": all(all(values.values()) for values in audits.values()),
@@ -91,10 +94,16 @@ def build() -> dict[str, Any]:
             "development_candidate_energy_evaluations"
         ]
         == 0,
-        "only_development_queue_exists": queue_artifacts
-        == ["artifacts/v5-final/s5/development-queue-v3.json"],
-        "h2_h4_queue_not_created": freeze["H2_H4_queue_created"] is False
+        "only_registered_separate_queues_exist": queue_artifacts
+        == [
+            "artifacts/v5-final/mb6/h2-h4-calibration-queue-v1.json",
+            "artifacts/v5-final/s5/development-queue-v3.json",
+        ],
+        "historical_h2_h4_absence_claims_preserved": freeze["H2_H4_queue_created"] is False
         and mb5["H2_H4_queue_created"] is False,
+        "mb6_h2_h4_queue_frozen_not_executed": mb6["decision"]
+        == "GO_MB7_PRE_CALIBRATION_AUDIT_ONLY"
+        and mb6["authorization"]["H2_H4_execution"] == "NOT_AUTHORIZED",
         "molecular_candidate_energy_not_executed": freeze[
             "molecular_candidate_energy_executed"
         ]
@@ -139,7 +148,7 @@ def build() -> dict[str, Any]:
     result = {
         "schema": "v5-final.ci-release-gate.v1",
         "status": (
-            "PASS_GO_MB6_OUTCOME_BLIND_QUEUE_FREEZE_ONLY"
+            "PASS_GO_MB7_PRE_CALIBRATION_AUDIT_ONLY"
             if all(checks.values())
             else "FAIL_CLOSED"
         ),
@@ -148,16 +157,17 @@ def build() -> dict[str, Any]:
         "queue_artifacts": queue_artifacts,
         "artifact_inventory": _artifact_inventory(),
         "authorization": {
-            "MB6_queue_freeze": "AUTHORIZED_TO_CREATE_AND_AUDIT_FREEZE_ONLY",
+            "MB6_queue_freeze": "COMPLETE_FROZEN_NOT_EXECUTED",
+            "MB7_pre_calibration_audit": "AUTHORIZED_ONLY",
             "molecular_candidate_energy": "NOT_AUTHORIZED",
             "H2_H4_execution": "NOT_AUTHORIZED",
             "development_queue_execution": "NOT_AUTHORIZED",
             "six_production_molecular_executors": "IMPLEMENTED_BINDING_ONLY_NOT_EXECUTION_AUTHORIZED",
             "P0_capacity": "NO_GO_BLOCKS_ALL_MOLECULAR_EXECUTION",
             "performance_claim": "NOT_AUTHORIZED",
-            "MB7_or_later": "NOT_AUTHORIZED",
+            "MB8_or_later": "NOT_AUTHORIZED",
         },
-        "decision": "GO_MB6_OUTCOME_BLIND_QUEUE_FREEZE_ONLY",
+        "decision": "GO_MB7_PRE_CALIBRATION_AUDIT_ONLY",
     }
     result["report_digest"] = _digest(result)
     return result
@@ -169,14 +179,15 @@ def audit() -> dict[str, Any]:
     if failures:
         raise CIReleaseGateError("CI release gate failed: " + ", ".join(failures))
     expected_authorization = {
-        "MB6_queue_freeze": "AUTHORIZED_TO_CREATE_AND_AUDIT_FREEZE_ONLY",
+        "MB6_queue_freeze": "COMPLETE_FROZEN_NOT_EXECUTED",
+        "MB7_pre_calibration_audit": "AUTHORIZED_ONLY",
         "molecular_candidate_energy": "NOT_AUTHORIZED",
         "H2_H4_execution": "NOT_AUTHORIZED",
         "development_queue_execution": "NOT_AUTHORIZED",
         "six_production_molecular_executors": "IMPLEMENTED_BINDING_ONLY_NOT_EXECUTION_AUTHORIZED",
         "P0_capacity": "NO_GO_BLOCKS_ALL_MOLECULAR_EXECUTION",
         "performance_claim": "NOT_AUTHORIZED",
-        "MB7_or_later": "NOT_AUTHORIZED",
+        "MB8_or_later": "NOT_AUTHORIZED",
     }
     if result["authorization"] != expected_authorization:
         raise CIReleaseGateError("CI release gate authorization boundary drifted")
