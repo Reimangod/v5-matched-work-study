@@ -20,6 +20,7 @@ from .mb5_outcome_free_executor_audit import audit as audit_mb5
 from .mb5_1_production_backend_audit import audit as audit_mb5_1
 from .mb6_queue_freeze import FREEZE_OUTPUT as MB6_OUTPUT, audit as audit_mb6
 from .mb7_pre_calibration_audit import OUTPUT as MB7_OUTPUT, audit as audit_mb7
+from .infrastructure_no_go_release import OUTPUT as NO_GO_RELEASE_OUTPUT, audit as audit_no_go_release
 from .p0_preexecution_audit import audit as audit_p0
 from .pre_calibration_gate import audit as audit_pre_calibration
 from .s0_documentation_amendment import audit as audit_documentation
@@ -62,6 +63,7 @@ def build() -> dict[str, Any]:
     p0 = json.loads(p0_path.read_text())
     mb6 = json.loads(MB6_OUTPUT.read_text())
     mb7 = json.loads(MB7_OUTPUT.read_text())
+    no_go_release = json.loads(NO_GO_RELEASE_OUTPUT.read_text())
     queue_artifacts = sorted(
         str(path.relative_to(ROOT))
         for path in (ROOT / "artifacts/v5-final").rglob("*queue*.json")
@@ -82,6 +84,7 @@ def build() -> dict[str, Any]:
         "mb5_1_production_backends": audit_mb5_1(),
         "mb6_outcome_blind_queue_freeze": audit_mb6(),
         "mb7_pre_calibration_no_go": audit_mb7(),
+        "terminal_infrastructure_no_go_release": audit_no_go_release(),
     }
     checks = {
         "all_audits_pass": all(all(values.values()) for values in audits.values()),
@@ -110,6 +113,9 @@ def build() -> dict[str, Any]:
         "mb7_no_go_is_fail_closed": mb7["decision"]
         == "NO_GO_MB7_UNRESOLVED_PRODUCTION_BINDING_AND_CAPACITY"
         and mb7["authorization"]["H2_H4_execution"] == "NOT_AUTHORIZED",
+        "terminal_release_is_zero_outcome_no_go": no_go_release["decision"]
+        == "NO_GO_V5_MATCHED_WORK_UNRESOLVED_INFRASTRUCTURE_V1"
+        and no_go_release["candidate_molecular_energy_evaluations"] == 0,
         "molecular_candidate_energy_not_executed": freeze[
             "molecular_candidate_energy_executed"
         ]
@@ -154,7 +160,7 @@ def build() -> dict[str, Any]:
     result = {
         "schema": "v5-final.ci-release-gate.v1",
         "status": (
-            "PASS_EXPECTED_MB7_NO_GO"
+            "PASS_TERMINAL_INFRASTRUCTURE_NO_GO"
             if all(checks.values())
             else "FAIL_CLOSED"
         ),
@@ -173,8 +179,9 @@ def build() -> dict[str, Any]:
             "performance_claim": "NOT_AUTHORIZED",
             "outcome_free_infrastructure_repair": "AUTHORIZED_WITH_VERSIONED_SUCCESSOR",
             "MB8_or_later": "NOT_AUTHORIZED",
+            "terminal_release": "NO_GO_V5_MATCHED_WORK_UNRESOLVED_INFRASTRUCTURE_V1",
         },
-        "decision": "NO_GO_MB7_UNRESOLVED_PRODUCTION_BINDING_AND_CAPACITY",
+        "decision": "NO_GO_V5_MATCHED_WORK_UNRESOLVED_INFRASTRUCTURE_V1",
     }
     result["report_digest"] = _digest(result)
     return result
@@ -196,6 +203,7 @@ def audit() -> dict[str, Any]:
         "performance_claim": "NOT_AUTHORIZED",
         "outcome_free_infrastructure_repair": "AUTHORIZED_WITH_VERSIONED_SUCCESSOR",
         "MB8_or_later": "NOT_AUTHORIZED",
+        "terminal_release": "NO_GO_V5_MATCHED_WORK_UNRESOLVED_INFRASTRUCTURE_V1",
     }
     if result["authorization"] != expected_authorization:
         raise CIReleaseGateError("CI release gate authorization boundary drifted")

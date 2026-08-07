@@ -5,8 +5,8 @@ from v5_final.ci_release_gate import audit
 
 def test_ci_release_gate_opens_only_mb7_audit_with_untouched_development_queue() -> None:
     result = audit()
-    assert result["status"] == "PASS_EXPECTED_MB7_NO_GO"
-    assert result["decision"] == "NO_GO_MB7_UNRESOLVED_PRODUCTION_BINDING_AND_CAPACITY"
+    assert result["status"] == "PASS_TERMINAL_INFRASTRUCTURE_NO_GO"
+    assert result["decision"] == "NO_GO_V5_MATCHED_WORK_UNRESOLVED_INFRASTRUCTURE_V1"
     assert all(result["checks"].values())
     assert result["queue_artifacts"] == [
         "artifacts/v5-final/mb6/h2-h4-calibration-queue-v1.json",
@@ -23,4 +23,5 @@ def test_ci_release_gate_opens_only_mb7_audit_with_untouched_development_queue()
         "performance_claim": "NOT_AUTHORIZED",
         "outcome_free_infrastructure_repair": "AUTHORIZED_WITH_VERSIONED_SUCCESSOR",
         "MB8_or_later": "NOT_AUTHORIZED",
+        "terminal_release": "NO_GO_V5_MATCHED_WORK_UNRESOLVED_INFRASTRUCTURE_V1",
     }
