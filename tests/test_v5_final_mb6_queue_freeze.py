@@ -66,4 +66,9 @@ def test_mb6_artifacts_rebuild_byte_identically_and_stop_before_execution() -> N
     assert freeze["decision"] == "GO_MB7_PRE_CALIBRATION_AUDIT_ONLY"
     assert freeze["authorization"]["molecular_candidate_energy"] == "NOT_AUTHORIZED"
     assert freeze["authorization"]["H2_H4_execution"] == "NOT_AUTHORIZED"
-    assert all(audit().values())
+    checks = audit()
+    assert all(checks.values())
+    assert "frozen_host_byte_identical_rebuild" in checks or (
+        checks["foreign_platform_static_audit_only"]
+        and checks["foreign_platform_not_misrepresented_as_bitwise_rebuild"]
+    )

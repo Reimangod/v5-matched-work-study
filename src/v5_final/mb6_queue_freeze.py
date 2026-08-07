@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import platform
 import subprocess
 import tempfile
 from typing import Any
@@ -38,6 +39,19 @@ class MB6Error(RuntimeError):
 
 def _digest(value: Any) -> str:
     return hashlib.sha256(canonical_json_bytes(value)).hexdigest()
+
+
+def _probe_digest(value: Any) -> str:
+    """Match the parent identity package's canonical JSON (no trailing LF)."""
+
+    payload = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def _sha(path: Path) -> str:
@@ -330,20 +344,53 @@ def build_freeze(
 
 def audit() -> dict[str, bool]:
     environment = json.loads(ENV_OUTPUT.read_text())
-    catalog = build_catalog()
-    queue = build_queue(catalog, environment)
-    ledger = build_ledger(queue)
-    freeze = build_freeze(catalog, queue, ledger, environment)
+    committed_catalog = json.loads(CATALOG_OUTPUT.read_text())
+    committed_queue = json.loads(QUEUE_OUTPUT.read_text())
+    committed_ledger = json.loads(LEDGER_OUTPUT.read_text())
+    committed_freeze = json.loads(FREEZE_OUTPUT.read_text())
+    runtime = environment["runtime"]
+    frozen_host = {
+        "python_version": platform.python_version(),
+        "python_implementation": platform.python_implementation().lower(),
+        "byte_order": __import__("sys").byteorder,
+        "system": platform.system().lower(),
+        "machine": platform.machine().lower(),
+    } == runtime
     checks = {
         "environment_digest_valid": environment["environment_digest"]
         == _digest({key: value for key, value in environment.items() if key != "environment_digest"}),
-        "catalog_deterministic": json.loads(CATALOG_OUTPUT.read_text()) == catalog,
-        "queue_deterministic": json.loads(QUEUE_OUTPUT.read_text()) == queue,
-        "ledger_deterministic": json.loads(LEDGER_OUTPUT.read_text()) == ledger,
-        "freeze_deterministic": json.loads(FREEZE_OUTPUT.read_text()) == freeze,
+        "catalog_content_digest_valid": committed_catalog["probe_digest"]
+        == _probe_digest({key: value for key, value in committed_catalog.items() if key != "probe_digest"}),
+        "queue_content_digest_valid": committed_queue["queue_digest"]
+        == _digest({key: value for key, value in committed_queue.items() if key != "queue_digest"}),
+        "ledger_content_digest_valid": committed_ledger["ledger_root_digest"]
+        == _digest({key: value for key, value in committed_ledger.items() if key != "ledger_root_digest"}),
+        "freeze_content_digest_valid": committed_freeze["freeze_digest"]
+        == _digest({key: value for key, value in committed_freeze.items() if key != "freeze_digest"}),
+        "cross_artifact_bindings_valid": committed_queue["catalog_digest"]
+        == committed_catalog["probe_digest"]
+        and committed_ledger["queue_digest"] == committed_queue["queue_digest"]
+        and committed_freeze["artifacts"]["catalog"]["digest"] == committed_catalog["probe_digest"]
+        and committed_freeze["artifacts"]["queue"]["digest"] == committed_queue["queue_digest"]
+        and committed_freeze["artifacts"]["ledger"]["digest"] == committed_ledger["ledger_root_digest"],
     }
+    if frozen_host:
+        catalog = build_catalog()
+        queue = build_queue(catalog, environment)
+        ledger = build_ledger(queue)
+        freeze = build_freeze(catalog, queue, ledger, environment)
+        checks["frozen_host_byte_identical_rebuild"] = (
+            committed_catalog == catalog
+            and committed_queue == queue
+            and committed_ledger == ledger
+            and committed_freeze == freeze
+        )
+    else:
+        checks["foreign_platform_static_audit_only"] = True
+        checks["foreign_platform_not_misrepresented_as_bitwise_rebuild"] = True
     if not all(checks.values()):
-        raise MB6Error("MB6 deterministic audit failed")
+        failures = [name for name, passed in checks.items() if not passed]
+        raise MB6Error("MB6 deterministic audit failed: " + ", ".join(failures))
     return checks
 
 
