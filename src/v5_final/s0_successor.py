@@ -227,6 +227,25 @@ def _current_file_sha256(path: str) -> str | None:
     return _sha256_bytes(candidate.read_bytes())
 
 
+def _exact_documentation_amendment_allows(
+    path: str,
+    expected_sha256: str,
+    observed_sha256: str | None,
+) -> bool:
+    if observed_sha256 is None:
+        return False
+    try:
+        from .s0_documentation_amendment import committed_transition_allows
+
+        return committed_transition_allows(
+            path=path,
+            expected_old_sha256=expected_sha256,
+            observed_new_sha256=observed_sha256,
+        )
+    except (FileNotFoundError, KeyError, RuntimeError, TypeError, ValueError):
+        return False
+
+
 def audit_manifest(*, require_clean: bool = False) -> dict[str, Any]:
     """Rebuild and audit S0, optionally enforcing clean release state."""
 
@@ -240,12 +259,19 @@ def audit_manifest(*, require_clean: bool = False) -> dict[str, Any]:
         key=lambda error: list(error.path),
     )
     changed_baseline: list[str] = []
+    documentation_amendments_applied: list[str] = []
     for item in committed["baseline"]["inventory"]:
         path_name = item["path"]
         if item["kind"] != "blob" or path_name in ALLOWED_BASELINE_MODIFICATIONS:
             continue
-        if _current_file_sha256(path_name) != item["sha256"]:
-            changed_baseline.append(path_name)
+        observed_sha256 = _current_file_sha256(path_name)
+        if observed_sha256 != item["sha256"]:
+            if _exact_documentation_amendment_allows(
+                path_name, item["sha256"], observed_sha256
+            ):
+                documentation_amendments_applied.append(path_name)
+            else:
+                changed_baseline.append(path_name)
     observed_threads = {name: os.environ.get(name) for name in DETERMINISTIC_THREAD_ENV}
     checks = {
         "schema_valid": not schema_errors,
@@ -276,6 +302,7 @@ def audit_manifest(*, require_clean: bool = False) -> dict[str, Any]:
         "checks": checks,
         "failed_checks": failures,
         "changed_baseline_paths": changed_baseline,
+        "documentation_amendments_applied": documentation_amendments_applied,
         "schema_errors": [error.message for error in schema_errors],
         "observed_thread_environment_diagnostic": observed_threads,
         "claim_boundary": "S0 isolation evidence only; no molecular performance evidence.",
