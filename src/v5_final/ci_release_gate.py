@@ -17,6 +17,8 @@ from .mb4_1_protocol_drafts_v2 import audit as audit_mb4_1_v2
 from .mb4_2_owner_protocol_freeze import audit as audit_mb4_2
 from .mb4_fail_closed import audit as audit_mb4
 from .mb5_outcome_free_executor_audit import audit as audit_mb5
+from .mb5_1_production_backend_audit import audit as audit_mb5_1
+from .p0_preexecution_audit import audit as audit_p0
 from .pre_calibration_gate import audit as audit_pre_calibration
 from .s0_documentation_amendment import audit as audit_documentation
 from .s0_successor import ROOT, audit_manifest
@@ -47,11 +49,15 @@ def build() -> dict[str, Any]:
     draft_path = ROOT / "artifacts/v5-final/method-native/mb4-1-protocol-drafts-v2.json"
     freeze_path = ROOT / "artifacts/v5-final/method-native/mb4-2-owner-protocol-freeze-v1.json"
     mb5_path = ROOT / "artifacts/v5-final/method-native/mb5-outcome-free-executors-v1.json"
+    mb5_1_path = ROOT / "artifacts/v5-final/method-native/mb5-1-production-backends-v3.json"
+    p0_path = ROOT / "artifacts/v5-final/pre-execution/p0-capacity-no-go-v1.json"
     queue = json.loads(queue_path.read_text())
     ledger = json.loads(ledger_path.read_text())
     draft = json.loads(draft_path.read_text())
     freeze = json.loads(freeze_path.read_text())
     mb5 = json.loads(mb5_path.read_text())
+    mb5_1 = json.loads(mb5_1_path.read_text())
+    p0 = json.loads(p0_path.read_text())
     queue_artifacts = sorted(
         str(path.relative_to(ROOT))
         for path in (ROOT / "artifacts/v5-final").rglob("*queue*.json")
@@ -68,6 +74,8 @@ def build() -> dict[str, Any]:
         "mb4_1_v2": audit_mb4_1_v2(),
         "mb4_2_owner_freeze": audit_mb4_2(),
         "mb5_outcome_free_executors": audit_mb5(),
+        "p0_preexecution_capacity": audit_p0(),
+        "mb5_1_production_backends": audit_mb5_1(),
     }
     checks = {
         "all_audits_pass": all(all(values.values()) for values in audits.values()),
@@ -114,14 +122,26 @@ def build() -> dict[str, Any]:
         "production_molecular_execution_absent": mb5[
             "production_molecular_executor_execution"
         ]
-        is False,
+        is False
+        and all(
+            result["molecular_kernel_calls"] == 0
+            for result in mb5_1["dry_run_results"].values()
+        ),
+        "six_production_backends_bound_outcome_free": mb5_1["status"]
+        == "PASS_OUTCOME_FREE_PRODUCTION_BACKEND_BINDING"
+        and mb5_1["decision"] == "GO_MB6_OUTCOME_BLIND_QUEUE_FREEZE_ONLY",
+        "p0_capacity_no_go_preserved": p0["status"]
+        == "NO_GO_INSUFFICIENT_SAFE_DISK_CAPACITY"
+        and p0["storage_policy"]["capacity_passed"] is False,
         "performance_not_authorized": mb5["authorization"]["performance_claim"]
         == "NOT_AUTHORIZED",
     }
     result = {
         "schema": "v5-final.ci-release-gate.v1",
         "status": (
-            "PASS_GO_MB6_QUEUE_FREEZE_ONLY" if all(checks.values()) else "FAIL_CLOSED"
+            "PASS_GO_MB6_OUTCOME_BLIND_QUEUE_FREEZE_ONLY"
+            if all(checks.values())
+            else "FAIL_CLOSED"
         ),
         "checks": checks,
         "audits": audits,
@@ -132,11 +152,12 @@ def build() -> dict[str, Any]:
             "molecular_candidate_energy": "NOT_AUTHORIZED",
             "H2_H4_execution": "NOT_AUTHORIZED",
             "development_queue_execution": "NOT_AUTHORIZED",
-            "six_production_molecular_executors": "NOT_AUTHORIZED",
+            "six_production_molecular_executors": "IMPLEMENTED_BINDING_ONLY_NOT_EXECUTION_AUTHORIZED",
+            "P0_capacity": "NO_GO_BLOCKS_ALL_MOLECULAR_EXECUTION",
             "performance_claim": "NOT_AUTHORIZED",
             "MB7_or_later": "NOT_AUTHORIZED",
         },
-        "decision": "GO_MB6_QUEUE_FREEZE_ONLY",
+        "decision": "GO_MB6_OUTCOME_BLIND_QUEUE_FREEZE_ONLY",
     }
     result["report_digest"] = _digest(result)
     return result
@@ -152,7 +173,8 @@ def audit() -> dict[str, Any]:
         "molecular_candidate_energy": "NOT_AUTHORIZED",
         "H2_H4_execution": "NOT_AUTHORIZED",
         "development_queue_execution": "NOT_AUTHORIZED",
-        "six_production_molecular_executors": "NOT_AUTHORIZED",
+        "six_production_molecular_executors": "IMPLEMENTED_BINDING_ONLY_NOT_EXECUTION_AUTHORIZED",
+        "P0_capacity": "NO_GO_BLOCKS_ALL_MOLECULAR_EXECUTION",
         "performance_claim": "NOT_AUTHORIZED",
         "MB7_or_later": "NOT_AUTHORIZED",
     }
