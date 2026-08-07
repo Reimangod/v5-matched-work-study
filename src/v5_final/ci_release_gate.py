@@ -11,6 +11,7 @@ from typing import Any
 from v5_matched_work.atomic_artifacts import canonical_json_bytes, write_json_exclusive
 
 from .mb3_1_hardening_audit import audit as audit_mb3_1
+from .mb3_1_hardening_v2_audit import audit as audit_mb3_1_v2
 from .mb4_1_protocol_drafts import audit as audit_mb4_1
 from .mb4_fail_closed import audit as audit_mb4
 from .pre_calibration_gate import audit as audit_pre_calibration
@@ -54,6 +55,7 @@ def build() -> dict[str, Any]:
         "s5": audit_s5(),
         "pre_calibration": audit_pre_calibration(),
         "mb3_1": audit_mb3_1(),
+        "mb3_1_v2": audit_mb3_1_v2(),
         "mb4": audit_mb4(),
         "mb4_1": audit_mb4_1(),
     }

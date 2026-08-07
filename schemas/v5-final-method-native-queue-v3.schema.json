@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Reimangod/v5-matched-work-study/schemas/v5-final-method-native-queue-v3.schema.json",
+  "title": "V5 final method-native frozen queue v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "status", "queue"],
+  "properties": {
+    "schema": {"const": "v5-final.method-native-frozen-queue.v3"},
+    "status": {"const": "FROZEN_PRE_OUTCOME"},
+    "queue": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["queue_item_id", "method_id", "case_id"],
+        "properties": {
+          "queue_item_id": {"type": "string", "minLength": 1},
+          "method_id": {
+            "enum": [
+              "immutable-ceo-star-source",
+              "same-structure-reoptimization",
+              "structural-magnitude-pruning",
+              "v4.1-one-shot-joint-compression",
+              "v5-sequential-without-rebuilding",
+              "v5-sequential-with-rebuilding"
+            ]
+          },
+          "case_id": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}
