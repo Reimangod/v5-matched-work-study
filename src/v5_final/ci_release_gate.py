@@ -13,6 +13,7 @@ from v5_matched_work.atomic_artifacts import canonical_json_bytes, write_json_ex
 from .mb3_1_hardening_audit import audit as audit_mb3_1
 from .mb3_1_hardening_v2_audit import audit as audit_mb3_1_v2
 from .mb4_1_protocol_drafts import audit as audit_mb4_1
+from .mb4_1_protocol_drafts_v2 import audit as audit_mb4_1_v2
 from .mb4_fail_closed import audit as audit_mb4
 from .pre_calibration_gate import audit as audit_pre_calibration
 from .s0_documentation_amendment import audit as audit_documentation
@@ -41,7 +42,7 @@ def _artifact_inventory() -> list[dict[str, str]]:
 def build() -> dict[str, Any]:
     queue_path = ROOT / "artifacts/v5-final/s5/development-queue-v3.json"
     ledger_path = ROOT / "artifacts/v5-final/s5/development-ledger-root-v3.json"
-    draft_path = ROOT / "artifacts/v5-final/method-native/mb4-1-protocol-drafts-v1.json"
+    draft_path = ROOT / "artifacts/v5-final/method-native/mb4-1-protocol-drafts-v2.json"
     queue = json.loads(queue_path.read_text())
     ledger = json.loads(ledger_path.read_text())
     draft = json.loads(draft_path.read_text())
@@ -58,6 +59,7 @@ def build() -> dict[str, Any]:
         "mb3_1_v2": audit_mb3_1_v2(),
         "mb4": audit_mb4(),
         "mb4_1": audit_mb4_1(),
+        "mb4_1_v2": audit_mb4_1_v2(),
     }
     checks = {
         "all_audits_pass": all(all(values.values()) for values in audits.values()),
@@ -83,7 +85,13 @@ def build() -> dict[str, Any]:
         "mb4_1_unapproved": draft["status"]
         == "NO_GO_AWAITING_INDEPENDENT_HUMAN_PROTOCOL_APPROVAL"
         and draft["approval_record"]
-        == {"reviewer": None, "approved_protocol_digests": [], "approval_artifact": None},
+        == {
+            "reviewer": None,
+            "review_date": None,
+            "decision": None,
+            "approval_artifact": None,
+            "approved_protocol_digests": [],
+        },
         "performance_not_authorized": draft["authorization"]["performance_claim"]
         == "NOT_AUTHORIZED",
     }
@@ -100,7 +108,7 @@ def build() -> dict[str, Any]:
             "six_production_molecular_executors": "NOT_AUTHORIZED",
             "performance_claim": "NOT_AUTHORIZED",
         },
-        "decision": "NO_GO_MB4_1_PROTOCOLS_PROPOSED_NOT_APPROVED",
+        "decision": "NO_GO_MB4_1_V2_AWAITING_INDEPENDENT_HUMAN_APPROVAL",
     }
     result["report_digest"] = _digest(result)
     return result
