@@ -52,12 +52,12 @@ jobs:
       - name: Run complete test suite
         run: uv run pytest -q
 
-      - name: Reconstruct latest fail-closed release gate
-        run: uv run python -m v5_final.ci_release_gate_v2 --output release-gate-report.json
+      - name: Reconstruct latest parent-native production preflight
+        run: uv run python -m v5_final.s8_parent_native_production_gate --preflight-output release-gate-report.json
 
-      - name: Require the v2 successor decision
+      - name: Require zero-outcome readiness without authorizing execution
         run: |
-          uv run python -c 'import json; report = json.load(open("release-gate-report.json")); assert report["decision"] == "NO_GO_V5_MATCHED_WORK_INFRASTRUCTURE_V2"'
+          uv run python -c 'import json; report = json.load(open("release-gate-report.json")); assert report["decision"] == "READY_AWAITING_FRESH_CLONE_AND_EXACT_CI"; assert report["candidate_molecular_energy_evaluations"] == 0; assert report["authorization"]["H2_H4_execution"] == "NOT_AUTHORIZED_BY_PREFLIGHT_ALONE"'
 
       - name: Record exact commit and artifact hash
         run: |
