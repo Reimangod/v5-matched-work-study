@@ -3,13 +3,21 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import platform
 import subprocess
+
+from v5_final.s3_parent_native_runtime_factory_audit import audit
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_actual_h2_h4_queue_bound_factory_is_outcome_free():
+    if platform.machine().lower() != "arm64":
+        # The frozen molecular runtime is macOS arm64.  Foreign CI must verify
+        # the immutable audit and must not pretend to reproduce that runtime.
+        assert all(audit().values())
+        return
     environment = dict(os.environ)
     environment["PYTHONPATH"] = os.pathsep.join(
         (

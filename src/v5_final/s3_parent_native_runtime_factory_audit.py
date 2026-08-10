@@ -15,7 +15,7 @@ from v5_matched_work.atomic_artifacts import canonical_json_bytes, write_json_ex
 from .s0_successor import CEO_COMMIT, PARENT_COMMIT, ROOT
 
 
-OUTPUT = ROOT / "artifacts/v5-final/parent-native/s3-queue-bound-runtime-factory-v1.json"
+OUTPUT = ROOT / "artifacts/v5-final/parent-native/s3-parent-native-runtime-factory-v1.json"
 PARENT_PYTHON = ROOT / "provenance/dvg-obs-ceo/.venv/bin/python"
 CATALOG = ROOT / "artifacts/v5-final/mb6-v2/h2-h4-source-catalog-v2.json"
 QUEUE = ROOT / "artifacts/v5-final/mb6-v2/h2-h4-calibration-queue-v2.json"
