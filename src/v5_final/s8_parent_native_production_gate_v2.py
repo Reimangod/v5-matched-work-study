@@ -341,11 +341,19 @@ def build_local_preflight(*, require_clean_worktree: bool = True) -> dict[str, A
 
 def build_ci_preflight() -> dict[str, Any]:
     common = _common_preflight(local_behavioral=False)
-    if not all(common["checks"].values()):
+    committed_go_audit = (
+        audit(require_current_capacity=False) if OUTPUT.exists() else {}
+    )
+    checks = {
+        **common["checks"],
+        "committed_GO_artifact_valid_if_present": not OUTPUT.exists()
+        or _all_pass(committed_go_audit),
+    }
+    if not all(checks.values()):
         raise S8ParentNativeProductionGateV2Error(
             "S8-v2 CI preflight failed: "
             + ", ".join(
-                name for name, passed in common["checks"].items() if not passed
+                name for name, passed in checks.items() if not passed
             )
         )
     result = {
@@ -356,7 +364,8 @@ def build_ci_preflight() -> dict[str, Any]:
         "validated_exact_commit": _git("rev-parse", "HEAD"),
         "plan_digest": _json(V4_PLAN)["plan_digest"],
         "audits": common["historical_audits"],
-        "checks": common["checks"],
+        "committed_GO_audit": committed_go_audit,
+        "checks": checks,
         "candidate_molecular_energy_evaluations": 0,
         "authorization": {
             "H2_H4_execution": "NOT_AUTHORIZED_BY_CI_PREFLIGHT_ALONE",
