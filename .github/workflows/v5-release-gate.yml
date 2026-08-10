@@ -52,8 +52,11 @@ jobs:
       - name: Run complete test suite
         run: uv run pytest -q
 
-      - name: Reconstruct fail-closed release gate
-        run: uv run python -m v5_final.ci_release_gate --output release-gate-report.json
+      - name: Reconstruct latest fail-closed release gate
+        run: uv run python -m v5_final.ci_release_gate_v2 --output release-gate-report.json
+
+      - name: Require the v2 successor decision
+        run: grep -F '"decision": "NO_GO_V5_MATCHED_WORK_INFRASTRUCTURE_V2"' release-gate-report.json
 
       - name: Record exact commit and artifact hash
         run: |
