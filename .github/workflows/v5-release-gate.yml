@@ -21,6 +21,7 @@ jobs:
       OMP_NUM_THREADS: "2"
       OPENBLAS_NUM_THREADS: "2"
       MKL_NUM_THREADS: "2"
+      PYTHONPATH: ${{ github.workspace }}/src:${{ github.workspace }}/provenance/dvg-obs-ceo/src:${{ github.workspace }}/provenance/dvg-obs-ceo/vendor/ceo-adapt-vqe
 
     steps:
       - name: Checkout exact commit and recursive provenance
@@ -55,14 +56,14 @@ jobs:
         run: uv sync --frozen --extra baseline
 
       - name: Run complete test suite
-        run: uv run pytest -q
+        run: provenance/dvg-obs-ceo/.venv/bin/python -m pytest -q
 
       - name: Reconstruct platform-neutral S8-v2 exact-CI preflight
-        run: uv run python -m v5_final.s8_parent_native_production_gate_v2 --ci-preflight-output release-gate-report.json
+        run: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s8_parent_native_production_gate_v2 --ci-preflight-output release-gate-report.json
 
       - name: Require zero-outcome readiness without authorizing execution
         run: |
-          uv run python -c 'import json; report = json.load(open("release-gate-report.json")); assert report["schema"] == "v5-final.s8-parent-native-exact-ci-preflight.v2"; assert report["decision"] == "READY_AWAITING_FROZEN_PLATFORM_FRESH_CLONE_EVIDENCE"; assert report["candidate_molecular_energy_evaluations"] == 0; assert report["authorization"]["H2_H4_execution"] == "NOT_AUTHORIZED_BY_CI_PREFLIGHT_ALONE"'
+          provenance/dvg-obs-ceo/.venv/bin/python -c 'import json; report = json.load(open("release-gate-report.json")); assert report["schema"] == "v5-final.s8-parent-native-exact-ci-preflight.v2"; assert report["decision"] == "READY_AWAITING_FROZEN_PLATFORM_FRESH_CLONE_EVIDENCE"; assert report["candidate_molecular_energy_evaluations"] == 0; assert report["authorization"]["H2_H4_execution"] == "NOT_AUTHORIZED_BY_CI_PREFLIGHT_ALONE"'
 
       - name: Record exact commit and artifact hash
         run: |
