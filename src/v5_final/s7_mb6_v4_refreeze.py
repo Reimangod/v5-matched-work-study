@@ -540,6 +540,84 @@ def audit() -> dict[str, bool]:
     return checks
 
 
+def audit_static() -> dict[str, bool]:
+    """Platform-neutral integrity audit for exact CI on non-frozen hosts."""
+
+    executors = _json(EXECUTOR_OUTPUT)
+    plan = _json(PLAN_OUTPUT)
+    ledger = _json(LEDGER_OUTPUT)
+    semantic_diff = _json(DIFF_OUTPUT)
+    freeze = _json(FREEZE_OUTPUT)
+    executor_body = dict(executors)
+    executor_digest = executor_body.pop("manifest_digest", None)
+    plan_body = dict(plan)
+    plan_digest = plan_body.pop("plan_digest", None)
+    ledger_body = dict(ledger)
+    ledger_digest = ledger_body.pop("ledger_root_digest", None)
+    diff_body = dict(semantic_diff)
+    diff_digest = diff_body.pop("audit_digest", None)
+    freeze_body = dict(freeze)
+    freeze_digest = freeze_body.pop("freeze_digest", None)
+    checks = {
+        "executor_digest_valid": executor_digest == _digest(executor_body),
+        "executor_sources_unchanged": all(
+            _sha(ROOT / item["path"]) == item["sha256"]
+            for item in executors["source_manifest"]
+        ),
+        "executor_gates_unchanged": all(
+            _sha(ROOT / item["path"]) == item["sha256"]
+            for item in executors["gate_manifest"]
+        ),
+        "plan_digest_valid": plan_digest == _digest(plan_body),
+        "plan_exact_36_unique_unstarted": len(plan["items"]) == 36
+        and len({item["queue_item_id"] for item in plan["items"]}) == 36
+        and all(item["terminal_status"] == "NOT_STARTED" for item in plan["items"]),
+        "plan_items_content_addressed": all(
+            item["queue_item_id"]
+            == "mb6-calibration-item-v4:"
+            + _digest({key: value for key, value in item.items() if key != "queue_item_id"})
+            for item in plan["items"]
+        ),
+        "candidate_work_bindings_content_addressed": all(
+            item["candidate_work_binding"]["binding_digest"]
+            == _digest(
+                {
+                    key: value
+                    for key, value in item["candidate_work_binding"].items()
+                    if key != "binding_digest"
+                }
+            )
+            for item in plan["items"]
+        ),
+        "ledger_digest_valid": ledger_digest == _digest(ledger_body),
+        "ledger_plan_bound_empty": ledger["plan_digest"] == plan["plan_digest"]
+        and ledger["plan_artifact_sha256"] == _sha(PLAN_OUTPUT)
+        and ledger["expected_queue_item_ids"]
+        == [item["queue_item_id"] for item in plan["items"]]
+        and not ledger["completed_queue_item_ids"]
+        and not ledger["raw_ledger_directories"]
+        and not ledger["terminal_segments"],
+        "semantic_diff_digest_and_checks_valid": diff_digest == _digest(diff_body)
+        and all(semantic_diff["checks"].values()),
+        "freeze_digest_and_checks_valid": freeze_digest == _digest(freeze_body)
+        and all(freeze["checks"].values()),
+        "freeze_artifacts_bound": all(
+            _sha(ROOT / value["path"]) == value["sha256"]
+            for value in freeze["artifacts"].values()
+        ),
+        "candidate_energy_zero_execution_blocked": plan["candidate_energy_evaluations"]
+        == 0
+        and ledger["candidate_energy_evaluations"] == 0
+        and freeze["authorization"]["H2_H4_execution"] == "NOT_AUTHORIZED",
+    }
+    failures = [name for name, passed in checks.items() if not passed]
+    if failures:
+        raise S7MB6V4RefreezeError(
+            "MB6-v4 static audit failed: " + ", ".join(failures)
+        )
+    return checks
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--write", action="store_true")
