@@ -9,6 +9,7 @@ def test_ci_release_gate_opens_only_mb7_audit_with_untouched_development_queue()
     assert result["decision"] == "NO_GO_V5_MATCHED_WORK_UNRESOLVED_INFRASTRUCTURE_V1"
     assert all(result["checks"].values())
     assert result["queue_artifacts"] == [
+        "artifacts/v5-final/mb6-v2/h2-h4-calibration-queue-v2.json",
         "artifacts/v5-final/mb6/h2-h4-calibration-queue-v1.json",
         "artifacts/v5-final/s5/development-queue-v3.json"
     ]

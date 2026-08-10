@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import subprocess
 from typing import Any
 
 from v5_matched_work.atomic_artifacts import canonical_json_bytes, write_json_exclusive
@@ -21,6 +22,8 @@ DEVELOPMENT_QUEUE = ROOT / "artifacts/v5-final/s5/development-queue-v3.json"
 DEVELOPMENT_LEDGER = ROOT / "artifacts/v5-final/s5/development-ledger-root-v3.json"
 EVIDENCE_COMMIT = "b5f0d72a87c6feee8222e49114ae7faacca9fd7e"
 CI_RUN = "https://github.com/Reimangod/v5-matched-work-study/actions/runs/31175579868"
+HISTORICAL_TAG = "v5-matched-work-infrastructure-no-go-v1"
+HISTORICAL_TAG_COMMIT = "4d87b335d21328e7485514f2644716a70bf2c9b8"
 
 
 class InfrastructureNoGoReleaseError(RuntimeError):
@@ -151,9 +154,33 @@ def build() -> dict[str, Any]:
 
 def audit() -> dict[str, bool]:
     committed = json.loads(OUTPUT.read_text())
-    rebuilt = build()
+    body = dict(committed)
+    observed_digest = body.pop("release_manifest_digest", None)
+    artifact_manifest_valid = all(
+        (ROOT / record["path"]).is_file()
+        and _sha(ROOT / record["path"]) == record["sha256"]
+        for record in committed["artifact_manifest"]
+    )
+    ledger_manifest_valid = all(
+        (ROOT / record["path"]).is_file()
+        and _sha(ROOT / record["path"]) == record["sha256"]
+        for record in committed["ledger_manifest"]
+    )
+    tag_commit = subprocess.run(
+        ["git", "-C", str(ROOT), "rev-list", "-n", "1", HISTORICAL_TAG],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    ).stdout.strip()
     checks = {
-        "deterministic_rebuild": committed == rebuilt,
+        # Historical releases are closed sets.  Additive successor artifacts
+        # must not make an immutable release fail merely because a live tree
+        # contains more files than it did at publication time.
+        "release_manifest_digest_valid": observed_digest == _digest(body),
+        "recorded_artifact_manifest_valid": artifact_manifest_valid,
+        "recorded_ledger_manifest_valid": ledger_manifest_valid,
+        "immutable_tag_unchanged": tag_commit == HISTORICAL_TAG_COMMIT,
         "terminal_decision_exact": committed["decision"]
         == "NO_GO_V5_MATCHED_WORK_UNRESOLVED_INFRASTRUCTURE_V1",
         "zero_outcome_work": committed["candidate_molecular_energy_evaluations"] == 0

@@ -102,6 +102,7 @@ def build() -> dict[str, Any]:
         == 0,
         "only_registered_separate_queues_exist": queue_artifacts
         == [
+            "artifacts/v5-final/mb6-v2/h2-h4-calibration-queue-v2.json",
             "artifacts/v5-final/mb6/h2-h4-calibration-queue-v1.json",
             "artifacts/v5-final/s5/development-queue-v3.json",
         ],
