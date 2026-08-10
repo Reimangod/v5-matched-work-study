@@ -17,6 +17,7 @@ jobs:
     timeout-minutes: 45
     env:
       GH_TOKEN: ${{ github.token }}
+      EXACT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       OMP_NUM_THREADS: "1"
       OPENBLAS_NUM_THREADS: "1"
       MKL_NUM_THREADS: "1"
@@ -25,8 +26,12 @@ jobs:
       - name: Checkout exact commit and recursive provenance
         uses: actions/checkout@v4
         with:
+          ref: ${{ env.EXACT_SHA }}
           fetch-depth: 0
           submodules: recursive
+
+      - name: Require checkout to equal requested exact commit
+        run: test "$(git rev-parse HEAD)" = "$EXACT_SHA"
 
       - name: Fetch recursive provenance tags
         run: git submodule foreach --recursive 'git fetch --force --tags origin'
@@ -68,7 +73,7 @@ jobs:
       - name: Upload external CI attestation
         uses: actions/upload-artifact@v4
         with:
-          name: v5-release-gate-${{ github.sha }}
+          name: v5-release-gate-${{ env.EXACT_SHA }}
           path: |
             exact-commit.txt
             exact-submodules.txt
