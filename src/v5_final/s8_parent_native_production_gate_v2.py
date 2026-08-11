@@ -90,6 +90,22 @@ def _all_pass(value: Mapping[str, bool]) -> bool:
     return bool(value) and all(value.values())
 
 
+def _reproducible_local_preflight_digest(value: Mapping[str, Any]) -> str:
+    """Hash scientific readiness while excluding the volatile free-byte sample."""
+
+    stable = {
+        key: item
+        for key, item in value.items()
+        if key not in {"preflight_digest", "reproducible_evidence_digest"}
+    }
+    stable["capacity"] = {
+        key: item
+        for key, item in value["capacity"].items()
+        if key != "available_bytes"
+    }
+    return _digest(stable)
+
+
 def _zero_outcome_checks() -> dict[str, bool]:
     plan = _json(V4_PLAN)
     ledger = _json(V4_LEDGER)
@@ -335,6 +351,9 @@ def build_local_preflight(*, require_clean_worktree: bool = True) -> dict[str, A
             "performance_claim": "NOT_AUTHORIZED",
         },
     }
+    result["reproducible_evidence_digest"] = _reproducible_local_preflight_digest(
+        result
+    )
     result["preflight_digest"] = _digest(result)
     return result
 
@@ -378,7 +397,9 @@ def build_ci_preflight() -> dict[str, Any]:
 
 
 def _validate_fresh_clone(
-    evidence: Mapping[str, Any], implementation_commit: str, preflight_digest: str
+    evidence: Mapping[str, Any],
+    implementation_commit: str,
+    reproducible_evidence_digest: str,
 ) -> dict[str, bool]:
     return {
         "schema": evidence.get("schema")
@@ -389,8 +410,10 @@ def _validate_fresh_clone(
         "clean_checkout": evidence.get("worktree_clean_before_tests") is True,
         "full_tests_passed": evidence.get("full_test_exit_code") == 0,
         "S8_v2_local_preflight_passed": evidence.get("S8_v2_preflight_exit_code") == 0,
-        "preflight_digest_exact": evidence.get("S8_v2_preflight_digest")
-        == preflight_digest,
+        "reproducible_preflight_evidence_exact": evidence.get(
+            "S8_v2_reproducible_evidence_digest"
+        )
+        == reproducible_evidence_digest,
         "candidate_energy_zero": evidence.get("candidate_energy_evaluations") == 0,
     }
 
@@ -421,7 +444,9 @@ def build_go(
     preflight = build_local_preflight()
     implementation_commit = preflight["validated_implementation_commit"]
     fresh_checks = _validate_fresh_clone(
-        fresh_clone_evidence, implementation_commit, preflight["preflight_digest"]
+        fresh_clone_evidence,
+        implementation_commit,
+        preflight["reproducible_evidence_digest"],
     )
     ci_checks = _validate_ci(ci_evidence, implementation_commit)
     checks = {
