@@ -110,6 +110,29 @@ class S11DevelopmentFreezeError(RuntimeError):
     pass
 
 
+def _cap_aware_preparation_contract() -> dict[str, bool]:
+    return {
+        "freeze_binds_all_generated_candidate_intents": True,
+        "freeze_binds_canonical_proposed_physical_state_ids": True,
+        "freeze_binds_conservative_full_recount_and_rewrite_work": True,
+        "projected_componentwise_cap_checked_before_executor_preparation": True,
+        "pareto_and_full_recount_preparation_deferred_to_authorized_item": True,
+        "candidate_outcome_used_at_freeze": False,
+    }
+
+
+def _item_preparation_contract() -> dict[str, Any]:
+    return {
+        "phase": "AUTHORIZED_ITEM_AFTER_PROJECTED_COMPONENTWISE_CAP_PRECHECK",
+        "selection_and_rewrite_inputs": (
+            "frozen source structure, gradient, inverse Hessian, candidate set, "
+            "executor bundle, and deterministic resource backend only"
+        ),
+        "candidate_energy_or_optimizer_outcome_used": False,
+        "deferred_work_is_counted_by_candidate_work_binding": True,
+    }
+
+
 def _json(path: Path) -> dict[str, Any]:
     raw = path.read_bytes()
     try:
@@ -401,14 +424,7 @@ def build_executor_manifest() -> dict[str, Any]:
             "candidate_work_binding_schema": (
                 "v5-final.parent-native-candidate-work-binding.v2"
             ),
-            "cap_aware_preparation_contract": {
-                "freeze_binds_all_generated_candidate_intents": True,
-                "freeze_binds_canonical_proposed_physical_state_ids": True,
-                "freeze_binds_conservative_full_recount_and_rewrite_work": True,
-                "projected_componentwise_cap_checked_before_executor_preparation": True,
-                "pareto_and_full_recount_preparation_deferred_to_authorized_item": True,
-                "candidate_outcome_used_at_freeze": False,
-            },
+            "cap_aware_preparation_contract": _cap_aware_preparation_contract(),
             "frozen_maximum_rounds_enforced_before_next_dynamic_catalog": True,
             "molecular_candidate_energy_evaluations": 0,
         },
@@ -482,15 +498,7 @@ def _base_plan(
                 "full_ansatz_recount": True,
                 "barrier_free_full_ansatz_compilation": False,
             },
-            "outcome_free_execution_preparation": {
-                "phase": "AUTHORIZED_ITEM_AFTER_PROJECTED_COMPONENTWISE_CAP_PRECHECK",
-                "selection_and_rewrite_inputs": (
-                    "frozen source structure, gradient, inverse Hessian, candidate set, "
-                    "executor bundle, and deterministic resource backend only"
-                ),
-                "candidate_energy_or_optimizer_outcome_used": False,
-                "deferred_work_is_counted_by_candidate_work_binding": True,
-            },
+            "outcome_free_execution_preparation": _item_preparation_contract(),
             "authorization_reference": {
                 "path": str(S10.relative_to(ROOT)),
                 "sha256": _sha(S10),
@@ -833,6 +841,11 @@ def build_semantic_diff(plan: Mapping[str, Any]) -> dict[str, Any]:
             for case_id in DEVELOPMENT_CASES
             for method in METHOD_IDS
         ),
+        "cap_aware_deferred_preparation_exact": all(
+            item["outcome_free_execution_preparation"]
+            == _item_preparation_contract()
+            for item in plan["items"]
+        ),
         "all_not_started_candidate_energy_zero": all(
             item["terminal_status"] == "NOT_STARTED" for item in plan["items"]
         )
@@ -886,10 +899,17 @@ def build_freeze(
         "executor_manifest_outcome_free": executors[
             "molecular_candidate_energy_evaluations"
         ]
-        == 0,
+        == 0
+        and executors.get("cap_aware_preparation_contract")
+        == _cap_aware_preparation_contract(),
         "plan_exact_90_unique_unstarted": len(plan["items"]) == 90
         and len({item["queue_item_id"] for item in plan["items"]}) == 90
         and all(item["terminal_status"] == "NOT_STARTED" for item in plan["items"]),
+        "plan_cap_aware_preparation_exact": all(
+            item.get("outcome_free_execution_preparation")
+            == _item_preparation_contract()
+            for item in plan["items"]
+        ),
         "plan_independent_rebuild_byte_identical": canonical_json_bytes(plan)
         == canonical_json_bytes(independently_rebuilt_plan),
         "semantic_diff_exact": semantic_diff["allowed_changes_only"] is True
@@ -983,6 +1003,10 @@ def audit_static() -> dict[str, bool]:
         and not any(catalog["molecular_kernel_guard_calls"].values()),
         "executor_digest_valid": executors["manifest_digest"]
         == _digest({key: value for key, value in executors.items() if key != "manifest_digest"}),
+        "executor_cap_aware_preparation_exact": executors.get(
+            "cap_aware_preparation_contract"
+        )
+        == _cap_aware_preparation_contract(),
         "executor_sources_unchanged": all(
             _sha(ROOT / item["path"]) == item["sha256"]
             for item in executors["source_manifest"]
@@ -1000,6 +1024,11 @@ def audit_static() -> dict[str, bool]:
             == "development-queue-item-v4:"
             + _digest({key: value for key, value in item.items() if key != "queue_item_id"})
             and item["terminal_status"] == "NOT_STARTED"
+            for item in plan["items"]
+        ),
+        "plan_cap_aware_preparation_exact": all(
+            item.get("outcome_free_execution_preparation")
+            == _item_preparation_contract()
             for item in plan["items"]
         ),
         "plan_cross_artifact_bindings_exact": plan["catalog_sha256"]
