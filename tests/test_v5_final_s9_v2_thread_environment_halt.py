@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import pytest
+
+
+pytest.importorskip("numpy")
+
 from v5_final.s9_v2_thread_environment_halt import (
     HALT_PATH,
     audit_failure_state,
