@@ -46,7 +46,10 @@ jobs:
         run: uv sync --frozen --extra baseline
 
       - name: Run S11 successor tests
-        run: provenance/dvg-obs-ceo/.venv/bin/python -m pytest -q tests/test_v5_final_s11_development_successor_v1.py
+        run: |
+          provenance/dvg-obs-ceo/.venv/bin/python -m pytest -q \
+            tests/test_v5_final_s11_development_successor_v1.py \
+            tests/test_v5_final_s11_development_runner_v1.py
 
       - name: Audit frozen S11 successor without molecular kernels
         if: hashFiles('artifacts/v5-final/parent-native/s11-development-queue-v4/development-outcome-blind-freeze-v4.json') != ''
@@ -57,3 +60,30 @@ jobs:
         if: hashFiles('artifacts/v5-final/parent-native/s11-development-queue-v4/development-outcome-blind-freeze-v4.json') != ''
         run: |
           provenance/dvg-obs-ceo/.venv/bin/python -c 'import json; artifact = json.load(open("artifacts/v5-final/parent-native/s11-development-queue-v4/development-outcome-blind-freeze-v4.json")); assert artifact["decision"] == "READY_FOR_S11_STATIC_EXACT_CI_ONLY"; assert artifact["candidate_molecular_energy_evaluations"] == 0; assert artifact["authorization"]["development_execution"] == "NOT_AUTHORIZED"; assert artifact["authorization"]["performance_claim"] == "NOT_AUTHORIZED"; assert all(artifact["checks"].values())'
+
+      - name: Build platform-neutral S11 runner audit
+        run: |
+          provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s11_development_runner_v1 \
+            --static-audit-output "$RUNNER_TEMP/s11-static-ci-report.json"
+
+      - name: Require S11 academic and systems boundary
+        run: |
+          provenance/dvg-obs-ceo/.venv/bin/python -c 'import json, os; report = json.load(open(os.path.join(os.environ["RUNNER_TEMP"], "s11-static-ci-report.json"))); progress = report["progress"]; assert report["validated_exact_commit"] == os.environ["EXACT_SHA"]; assert report["run_namespace"] == "s11-development-execution-v1"; assert progress["expected_item_count"] == 90; assert 0 <= progress["completed_terminal_count"] <= 90; assert all(report["checks"].values()); assert progress["FCI_reporting_performed"] is False; assert report["authorization"]["performance_claim"] == "NOT_AUTHORIZED"; assert (report["namespace_halted"] is True) or (progress["terminal_status_counts"]["KERNEL_FAILURE"] == 0 and progress["all_post_item_capacity_checks_passed"] is True)'
+
+      - name: Record exact commit and submodules
+        run: |
+          git rev-parse HEAD > exact-commit.txt
+          git submodule status --recursive > exact-submodules.txt
+
+      - name: Upload static S11 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: v5-s11-static-${{ env.EXACT_SHA }}
+          path: |
+            artifacts/v5-final/parent-native/s11-development-queue-v4/
+            artifacts/v5-final/parent-native/s11-development-execution-v1/
+            ${{ runner.temp }}/s11-static-ci-report.json
+            exact-commit.txt
+            exact-submodules.txt
+          if-no-files-found: error
+          retention-days: 90
