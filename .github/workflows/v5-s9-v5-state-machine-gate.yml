@@ -59,15 +59,26 @@ jobs:
         run: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_v4_preauthorization_halt
 
       - name: Reconstruct exact pre-stage audit outside worktree
-        run: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v5 --ci-audit-output "$RUNNER_TEMP/s9-v5-pre-stage-report.json"
+        run: |
+          if test -e artifacts/v5-final/parent-native/s9-h2-h4-calibration-v5/s9-v5-runtime-platform-halt-v1.json; then
+            provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_v5_platform_halt
+          else
+            provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v5 --ci-audit-output "$RUNNER_TEMP/s9-v5-pre-stage-report.json"
+          fi
 
       - name: Require common academic and engineering boundary
         run: |
-          provenance/dvg-obs-ceo/.venv/bin/python -c 'import json, os; report = json.load(open(os.path.join(os.environ["RUNNER_TEMP"], "s9-v5-pre-stage-report.json"))); progress = report["progress"]; assert report["validated_exact_commit"] == os.environ["EXACT_SHA"]; assert report["run_namespace"] == "s9-h2-h4-calibration-v5"; assert report["execution_venue"] == "github-actions-ubuntu-24.04-x64-single-job"; assert progress["expected_item_count"] == 36; assert report["candidate_molecular_energy_evaluations"] == progress["candidate_energy_evaluations"]; assert report["authorization"]["development_queue_execution"] == "NOT_AUTHORIZED"; assert report["authorization"]["performance_claim"] == "NOT_AUTHORIZED"; assert all(report["checks"].values()); assert all(report["v4_preauthorization_halt_audit"].values()); assert all(report["v5_checks"].values())'
+          if test -e artifacts/v5-final/parent-native/s9-h2-h4-calibration-v5/s9-v5-runtime-platform-halt-v1.json; then
+            provenance/dvg-obs-ceo/.venv/bin/python -c 'from v5_final.s9_v5_platform_halt import audit_halt; assert all(audit_halt().values())'
+          else
+            provenance/dvg-obs-ceo/.venv/bin/python -c 'import json, os; report = json.load(open(os.path.join(os.environ["RUNNER_TEMP"], "s9-v5-pre-stage-report.json"))); progress = report["progress"]; assert report["validated_exact_commit"] == os.environ["EXACT_SHA"]; assert report["run_namespace"] == "s9-h2-h4-calibration-v5"; assert report["execution_venue"] == "github-actions-ubuntu-24.04-x64-single-job"; assert progress["expected_item_count"] == 36; assert report["candidate_molecular_energy_evaluations"] == progress["candidate_energy_evaluations"]; assert report["authorization"]["development_queue_execution"] == "NOT_AUTHORIZED"; assert report["authorization"]["performance_claim"] == "NOT_AUTHORIZED"; assert all(report["checks"].values()); assert all(report["v4_preauthorization_halt_audit"].values()); assert all(report["v5_checks"].values())'
+          fi
 
       - name: Advance at most one frozen state-machine stage
         run: |
-          if test ! -e artifacts/v5-final/parent-native/s9-h2-h4-calibration-v5/s9-runner-readiness-v5.json; then
+          if test -e artifacts/v5-final/parent-native/s9-h2-h4-calibration-v5/s9-v5-runtime-platform-halt-v1.json; then
+            provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_v5_platform_halt
+          elif test ! -e artifacts/v5-final/parent-native/s9-h2-h4-calibration-v5/s9-runner-readiness-v5.json; then
             provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v5 --write-readiness
           elif test ! -e artifacts/v5-final/parent-native/s9-h2-h4-calibration-v5/s9-execution-authorization-v5.json; then
             provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v5 --write-readiness-ci-evidence --ci-report "$RUNNER_TEMP/s9-v5-pre-stage-report.json" --ci-evidence-output "$RUNNER_TEMP/s9-v5-readiness-ci-evidence.json" --run-id "$GITHUB_RUN_ID"
@@ -78,11 +89,20 @@ jobs:
 
       - name: Reconstruct exact post-stage audit
         if: always()
-        run: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v5 --ci-audit-output "$RUNNER_TEMP/s9-v5-post-stage-report.json"
+        run: |
+          if test -e artifacts/v5-final/parent-native/s9-h2-h4-calibration-v5/s9-v5-runtime-platform-halt-v1.json; then
+            provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_v5_platform_halt
+          else
+            provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v5 --ci-audit-output "$RUNNER_TEMP/s9-v5-post-stage-report.json"
+          fi
 
       - name: Require allowed post-stage state
         run: |
-          provenance/dvg-obs-ceo/.venv/bin/python -c 'import json, os; report = json.load(open(os.path.join(os.environ["RUNNER_TEMP"], "s9-v5-post-stage-report.json"))); progress = report["progress"]; assert report["validated_exact_commit"] == os.environ["EXACT_SHA"]; assert report["candidate_molecular_energy_evaluations"] == progress["candidate_energy_evaluations"]; assert report["authorization"]["development_queue_execution"] == "NOT_AUTHORIZED"; assert report["authorization"]["performance_claim"] == "NOT_AUTHORIZED"; assert all(report["checks"].values()); assert all(report["v5_checks"].values()); assert (progress["completed_terminal_count"] == 0 and report["namespace_halted"] is False) or (progress["completed_terminal_count"] == progress["expected_item_count"] == 36 and progress["complete"] is True and progress["terminal_status_counts"]["KERNEL_FAILURE"] == 0 and progress["all_post_item_capacity_checks_passed"] is True and report["namespace_halted"] is False)'
+          if test -e artifacts/v5-final/parent-native/s9-h2-h4-calibration-v5/s9-v5-runtime-platform-halt-v1.json; then
+            provenance/dvg-obs-ceo/.venv/bin/python -c 'from v5_final.s9_v5_platform_halt import audit_halt; assert all(audit_halt().values())'
+          else
+            provenance/dvg-obs-ceo/.venv/bin/python -c 'import json, os; report = json.load(open(os.path.join(os.environ["RUNNER_TEMP"], "s9-v5-post-stage-report.json"))); progress = report["progress"]; assert report["validated_exact_commit"] == os.environ["EXACT_SHA"]; assert report["candidate_molecular_energy_evaluations"] == progress["candidate_energy_evaluations"]; assert report["authorization"]["development_queue_execution"] == "NOT_AUTHORIZED"; assert report["authorization"]["performance_claim"] == "NOT_AUTHORIZED"; assert all(report["checks"].values()); assert all(report["v5_checks"].values()); assert (progress["completed_terminal_count"] == 0 and report["namespace_halted"] is False) or (progress["completed_terminal_count"] == progress["expected_item_count"] == 36 and progress["complete"] is True and progress["terminal_status_counts"]["KERNEL_FAILURE"] == 0 and progress["all_post_item_capacity_checks_passed"] is True and report["namespace_halted"] is False)'
+          fi
 
       - name: Record exact commit and submodules
         if: always()
