@@ -124,6 +124,10 @@ def _digest(value: Any) -> str:
     return hashlib.sha256(canonical_json_bytes(value)).hexdigest()
 
 
+def _parent_digest(value: Any) -> str:
+    return hashlib.sha256(parent_canonical_json_bytes(value)).hexdigest()
+
+
 def _with_digest(value: Mapping[str, Any], field: str) -> dict[str, Any]:
     result = copy.deepcopy(dict(value))
     result[field] = _digest(result)
@@ -256,7 +260,9 @@ def _case_record(source: Mapping[str, Any]) -> dict[str, Any]:
         }
         magnitude.append(
             {
-                "candidate_structural_id": "magnitude-delete-v1:" + _digest(payload),
+                "candidate_structural_id": (
+                    "magnitude-delete-v1:" + _parent_digest(payload)
+                ),
                 "equivalence_class_id": f"single-coordinate-position:{position}",
                 "canonical_order": position,
                 "ansatz_position": position,

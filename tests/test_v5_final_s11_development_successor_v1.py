@@ -24,6 +24,7 @@ from v5_final.s11_development_successor_v1 import (
     FREEZE_OUTPUT,
     METHOD_RENAME,
     S5_PROTOCOL,
+    _parent_digest,
     audit_static,
 )
 
@@ -90,6 +91,19 @@ def test_only_historical_no_rebuild_label_is_renamed() -> None:
             "v5-fixed-source-whitelist-no-replenishment"
         )
     }
+
+
+def test_parent_candidate_identity_uses_parent_canonical_domain() -> None:
+    from v5_final.parent_native_executors import _digest as executor_digest
+
+    payload = {
+        "source_state_preparation_id": "state-v1:" + "a" * 64,
+        "position": 3,
+        "pool_index": 17,
+        "constraint": "theta_i->0",
+        "physical_generator_deletion": True,
+    }
+    assert _parent_digest(payload) == executor_digest(payload)
 
 
 def test_development_execution_overrides_are_narrow_and_restored() -> None:
