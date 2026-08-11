@@ -58,19 +58,19 @@ jobs:
 
       - name: Require exact authorization and empty fresh namespace
         run: |
-          provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v4 --ci-audit-output s9-v4-pre-execution-report.json
-          provenance/dvg-obs-ceo/.venv/bin/python -c 'import json, os; report = json.load(open("s9-v4-pre-execution-report.json")); assert report["validated_exact_commit"] == os.environ["EXACT_SHA"]; assert report["decision"] == "S9_FROZEN_EXECUTION_AUTHORIZATION_VALID"; assert report["progress"]["completed_terminal_count"] == 0; assert report["candidate_molecular_energy_evaluations"] == 0; assert report["namespace_halted"] is False; assert all(report["checks"].values()); assert all(report["v4_checks"].values())'
+          provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v4 --ci-audit-output "$RUNNER_TEMP/s9-v4-pre-execution-report.json"
+          provenance/dvg-obs-ceo/.venv/bin/python -c 'import json, os; report = json.load(open(os.path.join(os.environ["RUNNER_TEMP"], "s9-v4-pre-execution-report.json"))); assert report["validated_exact_commit"] == os.environ["EXACT_SHA"]; assert report["decision"] == "S9_FROZEN_EXECUTION_AUTHORIZATION_VALID"; assert report["progress"]["completed_terminal_count"] == 0; assert report["candidate_molecular_energy_evaluations"] == 0; assert report["namespace_halted"] is False; assert all(report["checks"].values()); assert all(report["v4_checks"].values())'
 
       - name: Execute exact frozen 36-item calibration in one job
         run: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v4 --run --max-items 36
 
       - name: Reconstruct complete v4 audit
         if: always()
-        run: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v4 --ci-audit-output s9-v4-post-execution-report.json
+        run: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v4 --ci-audit-output "$RUNNER_TEMP/s9-v4-post-execution-report.json"
 
       - name: Require complete infrastructure-safe calibration
         run: |
-          provenance/dvg-obs-ceo/.venv/bin/python -c 'import json, os; report = json.load(open("s9-v4-post-execution-report.json")); progress = report["progress"]; assert report["validated_exact_commit"] == os.environ["EXACT_SHA"]; assert progress["completed_terminal_count"] == progress["expected_item_count"] == 36; assert progress["complete"] is True; assert progress["terminal_status_counts"]["KERNEL_FAILURE"] == 0; assert progress["all_post_item_capacity_checks_passed"] is True; assert report["namespace_halted"] is False; assert report["candidate_molecular_energy_evaluations"] == progress["candidate_energy_evaluations"]; assert report["authorization"]["development_queue_execution"] == "NOT_AUTHORIZED"; assert report["authorization"]["performance_claim"] == "NOT_AUTHORIZED"; assert all(report["checks"].values()); assert all(report["v4_checks"].values())'
+          provenance/dvg-obs-ceo/.venv/bin/python -c 'import json, os; report = json.load(open(os.path.join(os.environ["RUNNER_TEMP"], "s9-v4-post-execution-report.json"))); progress = report["progress"]; assert report["validated_exact_commit"] == os.environ["EXACT_SHA"]; assert progress["completed_terminal_count"] == progress["expected_item_count"] == 36; assert progress["complete"] is True; assert progress["terminal_status_counts"]["KERNEL_FAILURE"] == 0; assert progress["all_post_item_capacity_checks_passed"] is True; assert report["namespace_halted"] is False; assert report["candidate_molecular_energy_evaluations"] == progress["candidate_energy_evaluations"]; assert report["authorization"]["development_queue_execution"] == "NOT_AUTHORIZED"; assert report["authorization"]["performance_claim"] == "NOT_AUTHORIZED"; assert all(report["checks"].values()); assert all(report["v4_checks"].values())'
 
       - name: Record exact commit and submodules
         if: always()
@@ -85,8 +85,8 @@ jobs:
           name: v5-s9-v4-execution-${{ env.EXACT_SHA }}
           path: |
             artifacts/v5-final/parent-native/s9-h2-h4-calibration-v4/
-            s9-v4-pre-execution-report.json
-            s9-v4-post-execution-report.json
+            ${{ runner.temp }}/s9-v4-pre-execution-report.json
+            ${{ runner.temp }}/s9-v4-post-execution-report.json
             exact-commit.txt
             exact-submodules.txt
           if-no-files-found: error

@@ -59,25 +59,25 @@ jobs:
         run: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_v3_capacity_halt
 
       - name: Reconstruct isolated S9 v4 audit
-        run: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v4 --ci-audit-output s9-v4-release-gate-report.json
+        run: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v4 --ci-audit-output "$RUNNER_TEMP/s9-v4-release-gate-report.json"
 
       - name: Require exact v4 boundary and downstream blocks
         run: |
-          provenance/dvg-obs-ceo/.venv/bin/python -c 'import json, os; report = json.load(open("s9-v4-release-gate-report.json")); progress = report["progress"]; assert report["validated_exact_commit"] == os.environ["EXACT_SHA"]; assert report["run_namespace"] == "s9-h2-h4-calibration-v4"; assert report["execution_venue"] == "github-actions-ubuntu-24.04-x64-single-job"; assert progress["expected_item_count"] == 36; assert report["candidate_molecular_energy_evaluations"] == progress["candidate_energy_evaluations"]; assert report["authorization"]["development_queue_execution"] == "NOT_AUTHORIZED"; assert report["authorization"]["performance_claim"] == "NOT_AUTHORIZED"; assert all(report["checks"].values()); assert all(report["v3_capacity_halt_audit"].values()); assert all(report["v4_checks"].values())'
+          provenance/dvg-obs-ceo/.venv/bin/python -c 'import json, os; report = json.load(open(os.path.join(os.environ["RUNNER_TEMP"], "s9-v4-release-gate-report.json"))); progress = report["progress"]; assert report["validated_exact_commit"] == os.environ["EXACT_SHA"]; assert report["run_namespace"] == "s9-h2-h4-calibration-v4"; assert report["execution_venue"] == "github-actions-ubuntu-24.04-x64-single-job"; assert progress["expected_item_count"] == 36; assert report["candidate_molecular_energy_evaluations"] == progress["candidate_energy_evaluations"]; assert report["authorization"]["development_queue_execution"] == "NOT_AUTHORIZED"; assert report["authorization"]["performance_claim"] == "NOT_AUTHORIZED"; assert all(report["checks"].values()); assert all(report["v3_capacity_halt_audit"].values()); assert all(report["v4_checks"].values())'
 
       - name: Build next outcome-free proposal artifact
         run: |
           if test ! -e artifacts/v5-final/parent-native/s9-h2-h4-calibration-v4/s9-runner-readiness-v4.json; then
             provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v4 --write-readiness
           elif test ! -e artifacts/v5-final/parent-native/s9-h2-h4-calibration-v4/s9-execution-authorization-v4.json; then
-            provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v4 --write-authorization --ci-evidence s9-v4-release-gate-report.json
+            provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v4 --write-authorization --ci-evidence "$RUNNER_TEMP/s9-v4-release-gate-report.json"
           fi
 
       - name: Record exact commit and artifact hash
         run: |
           git rev-parse HEAD > exact-commit.txt
           git submodule status --recursive > exact-submodules.txt
-          shasum -a 256 s9-v4-release-gate-report.json > s9-v4-release-gate-report.sha256
+          shasum -a 256 "$RUNNER_TEMP/s9-v4-release-gate-report.json" > s9-v4-release-gate-report.sha256
 
       - name: Upload S9 v4 external CI attestation
         uses: actions/upload-artifact@v4
@@ -87,7 +87,7 @@ jobs:
             artifacts/v5-final/parent-native/s9-h2-h4-calibration-v4/*.json
             exact-commit.txt
             exact-submodules.txt
-            s9-v4-release-gate-report.json
+            ${{ runner.temp }}/s9-v4-release-gate-report.json
             s9-v4-release-gate-report.sha256
           if-no-files-found: error
           retention-days: 90

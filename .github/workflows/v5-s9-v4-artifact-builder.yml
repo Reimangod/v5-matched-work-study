@@ -65,11 +65,11 @@ jobs:
 
       - name: Reconstruct pre-authorization exact-CI evidence
         if: inputs.artifact_kind == 'authorization'
-        run: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v4 --ci-audit-output s9-v4-pre-authorization-report.json
+        run: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v4 --ci-audit-output "$RUNNER_TEMP/s9-v4-pre-authorization-report.json"
 
       - name: Build authorization without molecular execution
         if: inputs.artifact_kind == 'authorization'
-        run: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v4 --write-authorization --ci-evidence s9-v4-pre-authorization-report.json
+        run: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v4 --write-authorization --ci-evidence "$RUNNER_TEMP/s9-v4-pre-authorization-report.json"
 
       - name: Record exact commit and submodules
         run: |
@@ -82,7 +82,7 @@ jobs:
           name: v5-s9-v4-${{ inputs.artifact_kind }}-${{ env.EXACT_SHA }}
           path: |
             artifacts/v5-final/parent-native/s9-h2-h4-calibration-v4/*.json
-            s9-v4-pre-authorization-report.json
+            ${{ runner.temp }}/s9-v4-pre-authorization-report.json
             exact-commit.txt
             exact-submodules.txt
           if-no-files-found: error
