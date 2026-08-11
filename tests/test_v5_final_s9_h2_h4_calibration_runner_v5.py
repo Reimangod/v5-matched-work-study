@@ -40,10 +40,13 @@ def test_v5_requires_exact_github_single_job_venue(monkeypatch: pytest.MonkeyPat
     assert all(v5._require_pre_output_environment().values())
 
 
-def test_v5_current_namespace_is_not_halted() -> None:
-    assert v5._kernel_failure_receipts() == []
+def test_v5_current_namespace_is_halted_by_exact_index_zero_failure() -> None:
+    assert v5._kernel_failure_receipts() == [
+        "000-536bd9cab01a1fe9762310e82533b4d30ee88e8a26ea010489af621b740cf402.json"
+    ]
     assert v5._failed_post_capacity_receipts() == []
-    v5._require_resumable_namespace()
+    with pytest.raises(v5.S9V5CalibrationError, match="permanently halted"):
+        v5._require_resumable_namespace()
 
 
 def test_v5_sources_bind_state_machine_and_halt() -> None:
