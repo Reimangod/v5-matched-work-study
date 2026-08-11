@@ -26,6 +26,7 @@ ENVIRONMENT_PATH = (
     / "artifacts/v5-final/parent-native/mb6-v3/execution-environment-v3.json"
 )
 HALT_PATH = S9_V5_DIR / "s9-v5-runtime-platform-halt-v1.json"
+AUTHORIZATION_PATH = S9_V5_DIR / "s9-execution-authorization-v5.json"
 FAILED_ITEM_KEY = (
     "000-536bd9cab01a1fe9762310e82533b4d30ee88e8a26ea010489af621b740cf402"
 )
@@ -74,9 +75,21 @@ def _git(*arguments: str) -> str:
 
 
 def _is_ancestor(commit: str) -> bool:
+    return _is_ancestor_of(commit, "HEAD")
+
+
+def _is_ancestor_of(commit: str, descendant: str) -> bool:
     return (
         subprocess.run(
-            ["git", "-C", str(ROOT), "merge-base", "--is-ancestor", commit, "HEAD"],
+            [
+                "git",
+                "-C",
+                str(ROOT),
+                "merge-base",
+                "--is-ancestor",
+                commit,
+                descendant,
+            ],
             check=False,
         ).returncode
         == 0
@@ -195,13 +208,13 @@ def audit_failure_state() -> dict[str, Any]:
 
 
 def _validate_ci_report(
-    report_path: Path, *, failure_commit: str
+    report_path: Path, *, execution_commit: str
 ) -> tuple[dict[str, Any], dict[str, bool]]:
     report = _json(report_path)
     progress = report.get("progress", {})
     checks = {
-        "validated_failure_commit_exact": report.get("validated_exact_commit")
-        == failure_commit,
+        "validated_execution_commit_exact": report.get("validated_exact_commit")
+        == execution_commit,
         "decision_halts_namespace": report.get("decision")
         == "NO_GO_S9_V5_NAMESPACE_HALTED",
         "one_kernel_failure_exact": progress.get("completed_terminal_count") == 1
@@ -238,11 +251,22 @@ def build_halt(
     if run_id < 1 or job_id < 1 or not run_url.startswith("https://github.com/"):
         raise S9V5PlatformHaltError("invalid external CI identifiers")
     state = audit_failure_state()
-    failure_commit = _git(
+    artifact_commit = _git(
         "log", "-1", "--format=%H", "--", str(FAILED_RECEIPT_PATH.relative_to(ROOT))
     )
+    execution_commit = _git(
+        "log", "-1", "--format=%H", "--", str(AUTHORIZATION_PATH.relative_to(ROOT))
+    )
+    if not _is_ancestor(execution_commit) or not _is_ancestor(artifact_commit):
+        raise S9V5PlatformHaltError(
+            "execution and failure-artifact commits must be ancestors of HEAD"
+        )
+    if not _is_ancestor_of(execution_commit, artifact_commit):
+        raise S9V5PlatformHaltError(
+            "execution commit must be an ancestor of failure-artifact commit"
+        )
     report, ci_checks = _validate_ci_report(
-        ci_report_path, failure_commit=failure_commit
+        ci_report_path, execution_commit=execution_commit
     )
     artifact = {
         "schema": "v5-final.s9-v5-runtime-platform-halt.v1",
@@ -251,7 +275,10 @@ def build_halt(
         "decision": "NO_GO_S9_V5_RUNTIME_PLATFORM_PRECONDITION",
         "validated_halt_commit": _git("rev-parse", "HEAD"),
         "observed_failure": {
-            "artifact_commit": failure_commit,
+            "execution_commit": execution_commit,
+            "artifact_commit": artifact_commit,
+            "authorization_path": str(AUTHORIZATION_PATH.relative_to(ROOT)),
+            "authorization_sha256": _sha(AUTHORIZATION_PATH),
             "queue_index": 0,
             "queue_item_id": state["receipt"]["queue_item_id"],
             "terminal_status": "KERNEL_FAILURE",
@@ -329,10 +356,15 @@ def audit_halt() -> dict[str, bool]:
         "failure_state_still_exact": all(state["checks"].values()),
         "failure_artifacts_bound": observed.get("receipt_sha256")
         == _sha(FAILED_RECEIPT_PATH)
+        and observed.get("authorization_sha256") == _sha(AUTHORIZATION_PATH)
         and observed.get("kernel_event_sha256")
         == _sha(FAILED_KERNEL_EVENT_PATH)
         and observed.get("terminal_sha256") == _sha(FAILED_TERMINAL_PATH),
         "failure_commit_is_ancestor": _is_ancestor(observed["artifact_commit"]),
+        "execution_commit_is_ancestor": _is_ancestor(observed["execution_commit"]),
+        "execution_precedes_artifact_import": _is_ancestor_of(
+            observed["execution_commit"], observed["artifact_commit"]
+        ),
         "halt_commit_is_ancestor": _is_ancestor(artifact["validated_halt_commit"]),
         "exact_CI_checks_passed": all(
             artifact.get("exact_CI_evidence", {}).get("checks", {}).values()
