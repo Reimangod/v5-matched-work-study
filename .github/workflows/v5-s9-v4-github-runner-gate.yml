@@ -65,6 +65,14 @@ jobs:
         run: |
           provenance/dvg-obs-ceo/.venv/bin/python -c 'import json, os; report = json.load(open("s9-v4-release-gate-report.json")); progress = report["progress"]; assert report["validated_exact_commit"] == os.environ["EXACT_SHA"]; assert report["run_namespace"] == "s9-h2-h4-calibration-v4"; assert report["execution_venue"] == "github-actions-ubuntu-24.04-x64-single-job"; assert progress["expected_item_count"] == 36; assert report["candidate_molecular_energy_evaluations"] == progress["candidate_energy_evaluations"]; assert report["authorization"]["development_queue_execution"] == "NOT_AUTHORIZED"; assert report["authorization"]["performance_claim"] == "NOT_AUTHORIZED"; assert all(report["checks"].values()); assert all(report["v3_capacity_halt_audit"].values()); assert all(report["v4_checks"].values())'
 
+      - name: Build next outcome-free proposal artifact
+        run: |
+          if test ! -e artifacts/v5-final/parent-native/s9-h2-h4-calibration-v4/s9-runner-readiness-v4.json; then
+            provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v4 --write-readiness
+          elif test ! -e artifacts/v5-final/parent-native/s9-h2-h4-calibration-v4/s9-execution-authorization-v4.json; then
+            provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v4 --write-authorization --ci-evidence s9-v4-release-gate-report.json
+          fi
+
       - name: Record exact commit and artifact hash
         run: |
           git rev-parse HEAD > exact-commit.txt
@@ -76,6 +84,7 @@ jobs:
         with:
           name: v5-s9-v4-github-runner-gate-${{ env.EXACT_SHA }}
           path: |
+            artifacts/v5-final/parent-native/s9-h2-h4-calibration-v4/*.json
             exact-commit.txt
             exact-submodules.txt
             s9-v4-release-gate-report.json
