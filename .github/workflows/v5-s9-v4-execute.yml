@@ -1,0 +1,93 @@
+name: V5 S9 v4 frozen execution
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type EXECUTE_FROZEN_S9_V4_36 exactly
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  execute-frozen-v4:
+    name: execute-frozen-v4-single-job
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      EXACT_SHA: ${{ github.sha }}
+      OMP_NUM_THREADS: "2"
+      OPENBLAS_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
+      V5_S9_V4_EXECUTION_VENUE: github-actions-ubuntu-24.04-x64-single-job
+      PYTHONPATH: ${{ github.workspace }}/src:${{ github.workspace }}/provenance/dvg-obs-ceo/src:${{ github.workspace }}/provenance/dvg-obs-ceo/vendor/ceo-adapt-vqe
+
+    steps:
+      - name: Require exact explicit confirmation
+        run: test "${{ inputs.confirmation }}" = "EXECUTE_FROZEN_S9_V4_36"
+
+      - name: Checkout exact commit and recursive provenance
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_SHA }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Require checkout to equal requested exact commit
+        run: test "$(git rev-parse HEAD)" = "$EXACT_SHA"
+
+      - name: Fetch recursive provenance tags
+        run: git submodule foreach --recursive 'git fetch --force --tags origin'
+
+      - name: Set up pinned Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10.19"
+
+      - name: Set up pinned uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.9.8"
+          enable-cache: true
+
+      - name: Sync pinned parent baseline environment
+        working-directory: provenance/dvg-obs-ceo
+        run: uv sync --frozen --extra baseline
+
+      - name: Require exact authorization and empty fresh namespace
+        run: |
+          provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v4 --ci-audit-output s9-v4-pre-execution-report.json
+          provenance/dvg-obs-ceo/.venv/bin/python -c 'import json, os; report = json.load(open("s9-v4-pre-execution-report.json")); assert report["validated_exact_commit"] == os.environ["EXACT_SHA"]; assert report["decision"] == "S9_FROZEN_EXECUTION_AUTHORIZATION_VALID"; assert report["progress"]["completed_terminal_count"] == 0; assert report["candidate_molecular_energy_evaluations"] == 0; assert report["namespace_halted"] is False; assert all(report["checks"].values()); assert all(report["v4_checks"].values())'
+
+      - name: Execute exact frozen 36-item calibration in one job
+        run: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v4 --run --max-items 36
+
+      - name: Reconstruct complete v4 audit
+        if: always()
+        run: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v4 --ci-audit-output s9-v4-post-execution-report.json
+
+      - name: Require complete infrastructure-safe calibration
+        run: |
+          provenance/dvg-obs-ceo/.venv/bin/python -c 'import json, os; report = json.load(open("s9-v4-post-execution-report.json")); progress = report["progress"]; assert report["validated_exact_commit"] == os.environ["EXACT_SHA"]; assert progress["completed_terminal_count"] == progress["expected_item_count"] == 36; assert progress["complete"] is True; assert progress["terminal_status_counts"]["KERNEL_FAILURE"] == 0; assert progress["all_post_item_capacity_checks_passed"] is True; assert report["namespace_halted"] is False; assert report["candidate_molecular_energy_evaluations"] == progress["candidate_energy_evaluations"]; assert report["authorization"]["development_queue_execution"] == "NOT_AUTHORIZED"; assert report["authorization"]["performance_claim"] == "NOT_AUTHORIZED"; assert all(report["checks"].values()); assert all(report["v4_checks"].values())'
+
+      - name: Record exact commit and submodules
+        if: always()
+        run: |
+          git rev-parse HEAD > exact-commit.txt
+          git submodule status --recursive > exact-submodules.txt
+
+      - name: Upload all v4 evidence even on fail-closed stop
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v5-s9-v4-execution-${{ env.EXACT_SHA }}
+          path: |
+            artifacts/v5-final/parent-native/s9-h2-h4-calibration-v4/
+            s9-v4-pre-execution-report.json
+            s9-v4-post-execution-report.json
+            exact-commit.txt
+            exact-submodules.txt
+          if-no-files-found: error
+          retention-days: 90
