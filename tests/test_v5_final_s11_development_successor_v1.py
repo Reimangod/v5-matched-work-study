@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import inspect
 
 import pytest
 
@@ -21,11 +22,14 @@ from v5_final.parent_native_development_runtime_factory_v1 import (
 )
 from v5_final.parent_native_runtime_factory import QueueBoundRuntimeError
 from v5_final.s11_development_successor_v1 import (
+    EXECUTION_SOURCES,
     FREEZE_OUTPUT,
     METHOD_RENAME,
     S5_PROTOCOL,
+    _candidate_work_binding,
     _parent_digest,
     audit_static,
+    build_executor_manifest,
 )
 
 
@@ -120,6 +124,25 @@ def test_development_execution_overrides_are_narrow_and_restored() -> None:
     assert services.ParentNativeExecutionServices is original_services
     assert services._dynamic_v5_preparation is original_v5
     assert services._dynamic_magnitude_preparation is original_magnitude
+
+
+def test_freeze_defers_pareto_and_full_recounts_to_cap_aware_execution() -> None:
+    manifest = build_executor_manifest()
+    contract = manifest["cap_aware_preparation_contract"]
+    assert all(
+        value
+        for key, value in contract.items()
+        if key != "candidate_outcome_used_at_freeze"
+    )
+    assert contract["candidate_outcome_used_at_freeze"] is False
+    assert "prepare_method_executor" not in inspect.getsource(_candidate_work_binding)
+    execution_source = inspect.getsource(services.execute_frozen_item)
+    assert execution_source.index("recorder._precheck(projected") < execution_source.index(
+        "prepare_method_executor(context, item)"
+    )
+    assert any(
+        path.name == "s11_development_successor_v1.py" for path in EXECUTION_SOURCES
+    )
 
 
 def test_frozen_s11_artifacts_are_static_auditable_if_present() -> None:

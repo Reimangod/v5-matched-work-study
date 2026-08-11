@@ -43,6 +43,10 @@ from .parent_native_candidate_work_bindings import (
     _single_candidate_bindings,
     candidate_structural_whitelist_key,
 )
+from .parent_native_candidate_adapter import (
+    build_typed_catalog,
+    compose_parent_native_plan,
+)
 from .parent_native_development_runtime_factory_v1 import (
     DEVELOPMENT_CASES,
     ENVIRONMENT_PATH,
@@ -53,7 +57,7 @@ from .parent_native_development_runtime_factory_v1 import (
     _algorithm_outcome_free,
     build_queue_bound_development_runtime_v1,
 )
-from .parent_native_executors import prepare_method_executor
+from .parent_native_executors import _compatible_v4_sentinels
 from .parent_native_physical_identity import canonical_proposed_physical_state_id
 from .parent_native_work_accounting import work_cap_digest
 from .s0_successor import CEO_COMMIT, PARENT_COMMIT, ROOT
@@ -96,6 +100,7 @@ EXECUTION_SOURCES = tuple(
         "src/v5_final/parent_native_execution_services.py",
         "src/v5_final/parent_native_zero_dimensional_v2.py",
         "src/v5_final/parent_native_development_execution_v1.py",
+        "src/v5_final/s11_development_successor_v1.py",
         "src/v5_final/semantic_contract_v2.py",
     )
 )
@@ -396,6 +401,14 @@ def build_executor_manifest() -> dict[str, Any]:
             "candidate_work_binding_schema": (
                 "v5-final.parent-native-candidate-work-binding.v2"
             ),
+            "cap_aware_preparation_contract": {
+                "freeze_binds_all_generated_candidate_intents": True,
+                "freeze_binds_canonical_proposed_physical_state_ids": True,
+                "freeze_binds_conservative_full_recount_and_rewrite_work": True,
+                "projected_componentwise_cap_checked_before_executor_preparation": True,
+                "pareto_and_full_recount_preparation_deferred_to_authorized_item": True,
+                "candidate_outcome_used_at_freeze": False,
+            },
             "frozen_maximum_rounds_enforced_before_next_dynamic_catalog": True,
             "molecular_candidate_energy_evaluations": 0,
         },
@@ -469,6 +482,15 @@ def _base_plan(
                 "full_ansatz_recount": True,
                 "barrier_free_full_ansatz_compilation": False,
             },
+            "outcome_free_execution_preparation": {
+                "phase": "AUTHORIZED_ITEM_AFTER_PROJECTED_COMPONENTWISE_CAP_PRECHECK",
+                "selection_and_rewrite_inputs": (
+                    "frozen source structure, gradient, inverse Hessian, candidate set, "
+                    "executor bundle, and deterministic resource backend only"
+                ),
+                "candidate_energy_or_optimizer_outcome_used": False,
+                "deferred_work_is_counted_by_candidate_work_binding": True,
+            },
             "authorization_reference": {
                 "path": str(S10.relative_to(ROOT)),
                 "sha256": _sha(S10),
@@ -511,9 +533,6 @@ def _candidate_work_binding(
     item: Mapping[str, Any],
     preparation_cache: dict[str, Any],
 ) -> dict[str, Any]:
-    prepared = prepare_method_executor(
-        context, item, preparation_cache=preparation_cache
-    )
     method = str(item["method_id"])
     if method in {"immutable-ceo-star-source", "same-structure-reoptimization"}:
         generated: tuple[tuple[str, str], ...] = ()
@@ -522,28 +541,61 @@ def _candidate_work_binding(
         whitelist: tuple[str, ...] = ()
     elif method == "structural-magnitude-pruning":
         generated = _magnitude_bindings(context, item)
-        if prepared.magnitude_deletion is None:
-            raise S11DevelopmentFreezeError("magnitude preparation is absent")
-        expanded = (dict(generated)[prepared.magnitude_deletion.candidate_id],)
+        frozen_ids = [
+            str(value["candidate_structural_id"])
+            for value in item["candidate_binding"]["candidate_set"]
+        ]
+        if not frozen_ids or set(frozen_ids) != {value[0] for value in generated}:
+            raise S11DevelopmentFreezeError(
+                "magnitude binding differs from the frozen source coordinates"
+            )
+        expanded = (dict(generated)[frozen_ids[0]],)
         recounts, rewrites, dynamic_upper = 3, 1, len(generated)
         whitelist = ()
     else:
-        if prepared.source_catalog is None:
-            raise S11DevelopmentFreezeError("structural catalog is absent")
-        generated = _single_candidate_bindings(context, prepared.source_catalog)
+        source_catalog = preparation_cache.get("source_catalog")
+        if source_catalog is None:
+            source_catalog = build_typed_catalog(
+                context.pool, context.runtime.ansatz
+            )
+            preparation_cache["source_catalog"] = source_catalog
+        generated = _single_candidate_bindings(context, source_catalog)
+        actual_ids = tuple(candidate.candidate_id for candidate in source_catalog.candidates)
+        frozen_ids = tuple(
+            str(value["candidate_structural_id"])
+            for value in item["candidate_binding"]["candidate_set"]
+        )
         if method == "v4.1-one-shot-joint-compression":
-            expanded = tuple(
+            if not frozen_ids or any(value not in set(actual_ids) for value in frozen_ids):
+                raise S11DevelopmentFreezeError(
+                    "V4.1 sentinels differ from the actual source catalog"
+                )
+            selected, _ = _compatible_v4_sentinels(source_catalog, frozen_ids)
+            plan = compose_parent_native_plan(
+                pool=context.pool,
+                source=context.runtime.ansatz,
+                catalog=source_catalog,
+                candidates=selected,
+                gradient=context.runtime.gradient,
+                inverse_hessian=context.runtime.inverse_hessian,
+                problem_id=context.problem_id,
+                reference_state=context._actual_algorithm.ref_det,
+            )
+            expanded = (
                 canonical_proposed_physical_state_id(
                     problem_id=context.problem_id,
                     state_preparation_spec=plan.proposed_state_preparation_spec,
-                )
-                for plan in prepared.candidate_plans
+                ),
             )
-            recounts = 3 * len(prepared.prepared_rewrites)
-            rewrites = sum(len(plan.candidates) for plan in prepared.candidate_plans)
+            recounts = 3
+            rewrites = len(selected)
             dynamic_upper = 0
             whitelist = ()
         else:
+            if set(frozen_ids) != set(actual_ids) or len(frozen_ids) != len(actual_ids):
+                raise S11DevelopmentFreezeError(
+                    "frozen structural candidate set differs from the actual source catalog"
+                )
             expanded = tuple(physical_id for _, physical_id in generated)
             recounts, rewrites = 3 * len(generated), len(generated)
             dynamic_upper = len(generated)
@@ -551,7 +603,7 @@ def _candidate_work_binding(
                 tuple(
                     sorted(
                         candidate_structural_whitelist_key(candidate)
-                        for candidate in prepared.source_catalog.candidates
+                        for candidate in source_catalog.candidates
                     )
                 )
                 if method == "v5-fixed-source-whitelist-no-replenishment"
@@ -565,11 +617,8 @@ def _candidate_work_binding(
         dynamic_upper,
         whitelist,
     ).to_dict()
-    if (
-        len(generated) != prepared.generated_candidate_intents
-        or len(set(expanded)) != prepared.unique_proposed_physical_states
-    ):
-        raise S11DevelopmentFreezeError("candidate work binding differs from executor")
+    if result["candidate_generation_count"] != len(generated):
+        raise S11DevelopmentFreezeError("candidate generation binding is incomplete")
     return result
 
 
