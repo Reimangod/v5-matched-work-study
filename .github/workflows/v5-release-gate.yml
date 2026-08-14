@@ -17,16 +17,22 @@ jobs:
     timeout-minutes: 45
     env:
       GH_TOKEN: ${{ github.token }}
-      OMP_NUM_THREADS: "1"
-      OPENBLAS_NUM_THREADS: "1"
-      MKL_NUM_THREADS: "1"
+      EXACT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      OMP_NUM_THREADS: "2"
+      OPENBLAS_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
+      PYTHONPATH: ${{ github.workspace }}/src:${{ github.workspace }}/provenance/dvg-obs-ceo/src:${{ github.workspace }}/provenance/dvg-obs-ceo/vendor/ceo-adapt-vqe
 
     steps:
       - name: Checkout exact commit and recursive provenance
         uses: actions/checkout@v4
         with:
+          ref: ${{ env.EXACT_SHA }}
           fetch-depth: 0
           submodules: recursive
+
+      - name: Require checkout to equal requested exact commit
+        run: test "$(git rev-parse HEAD)" = "$EXACT_SHA"
 
       - name: Fetch recursive provenance tags
         run: git submodule foreach --recursive 'git fetch --force --tags origin'
@@ -50,25 +56,41 @@ jobs:
         run: uv sync --frozen --extra baseline
 
       - name: Run complete test suite
-        run: uv run pytest -q
+        run: |
+          uv run pytest -q --ignore=tests/test_v5_final_s7_mb6_v4_refreeze.py --ignore=tests/test_v5_final_s8_parent_native_production_gate_v2.py --ignore=tests/test_v5_final_s9_h2_h4_calibration_runner.py
+          provenance/dvg-obs-ceo/.venv/bin/python -m pytest -q tests/test_v5_final_s7_mb6_v4_refreeze.py tests/test_v5_final_s8_parent_native_production_gate_v2.py tests/test_v5_final_s9_h2_h4_calibration_runner.py
 
-      - name: Reconstruct fail-closed release gate
-        run: uv run python -m v5_final.ci_release_gate --output release-gate-report.json
+      - name: Reconstruct platform-neutral S8-v2 exact-CI preflight
+        run: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s8_parent_native_production_gate_v2 --ci-preflight-output release-gate-report.json
+
+      - name: Require zero-outcome readiness without authorizing execution
+        run: |
+          provenance/dvg-obs-ceo/.venv/bin/python -c 'import json; report = json.load(open("release-gate-report.json")); assert report["schema"] == "v5-final.s8-parent-native-exact-ci-preflight.v2"; assert report["decision"] == "READY_AWAITING_FROZEN_PLATFORM_FRESH_CLONE_EVIDENCE"; assert report["candidate_molecular_energy_evaluations"] == 0; assert report["authorization"]["H2_H4_execution"] == "NOT_AUTHORIZED_BY_CI_PREFLIGHT_ALONE"'
+
+      - name: Reconstruct S9 authoritative current-progress audit
+        run: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner --ci-audit-output s9-release-gate-report.json
+
+      - name: Require S9 integrity and keep development blocked
+        run: |
+          provenance/dvg-obs-ceo/.venv/bin/python -c 'import json; report = json.load(open("s9-release-gate-report.json")); assert report["schema"] == "v5-final.s9-h2-h4-ci-audit.v1"; assert all(report["checks"].values()); assert report["authorization"]["development_queue_execution"] == "NOT_AUTHORIZED"; assert report["authorization"]["performance_claim"] == "NOT_AUTHORIZED"'
 
       - name: Record exact commit and artifact hash
         run: |
           git rev-parse HEAD > exact-commit.txt
           git submodule status --recursive > exact-submodules.txt
           shasum -a 256 release-gate-report.json > release-gate-report.sha256
+          shasum -a 256 s9-release-gate-report.json > s9-release-gate-report.sha256
 
       - name: Upload external CI attestation
         uses: actions/upload-artifact@v4
         with:
-          name: v5-release-gate-${{ github.sha }}
+          name: v5-release-gate-${{ env.EXACT_SHA }}
           path: |
             exact-commit.txt
             exact-submodules.txt
             release-gate-report.json
             release-gate-report.sha256
+            s9-release-gate-report.json
+            s9-release-gate-report.sha256
           if-no-files-found: error
           retention-days: 90

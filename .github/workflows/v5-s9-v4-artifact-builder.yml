@@ -1,0 +1,89 @@
+name: V5 S9 v4 artifact builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_kind:
+        description: Outcome-free artifact to build
+        required: true
+        type: choice
+        options:
+          - readiness
+          - authorization
+
+permissions:
+  contents: read
+
+jobs:
+  build-v4-artifact:
+    name: build-v4-${{ inputs.artifact_kind }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      EXACT_SHA: ${{ github.sha }}
+      OMP_NUM_THREADS: "2"
+      OPENBLAS_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
+      V5_S9_V4_EXECUTION_VENUE: github-actions-ubuntu-24.04-x64-single-job
+      PYTHONPATH: ${{ github.workspace }}/src:${{ github.workspace }}/provenance/dvg-obs-ceo/src:${{ github.workspace }}/provenance/dvg-obs-ceo/vendor/ceo-adapt-vqe
+
+    steps:
+      - name: Checkout exact commit and recursive provenance
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_SHA }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Require checkout to equal requested exact commit
+        run: test "$(git rev-parse HEAD)" = "$EXACT_SHA"
+
+      - name: Fetch recursive provenance tags
+        run: git submodule foreach --recursive 'git fetch --force --tags origin'
+
+      - name: Set up pinned Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10.19"
+
+      - name: Set up pinned uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.9.8"
+          enable-cache: true
+
+      - name: Sync pinned parent baseline environment
+        working-directory: provenance/dvg-obs-ceo
+        run: uv sync --frozen --extra baseline
+
+      - name: Run bound v4 tests
+        run: provenance/dvg-obs-ceo/.venv/bin/python -m pytest -q tests/test_v5_final_s9_h2_h4_calibration_runner_v4.py
+
+      - name: Build readiness without molecular execution
+        if: inputs.artifact_kind == 'readiness'
+        run: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v4 --write-readiness
+
+      - name: Reconstruct pre-authorization exact-CI evidence
+        if: inputs.artifact_kind == 'authorization'
+        run: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v4 --ci-audit-output "$RUNNER_TEMP/s9-v4-pre-authorization-report.json"
+
+      - name: Build authorization without molecular execution
+        if: inputs.artifact_kind == 'authorization'
+        run: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v4 --write-authorization --ci-evidence "$RUNNER_TEMP/s9-v4-pre-authorization-report.json"
+
+      - name: Record exact commit and submodules
+        run: |
+          git rev-parse HEAD > exact-commit.txt
+          git submodule status --recursive > exact-submodules.txt
+
+      - name: Upload exclusive-created v4 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: v5-s9-v4-${{ inputs.artifact_kind }}-${{ env.EXACT_SHA }}
+          path: |
+            artifacts/v5-final/parent-native/s9-h2-h4-calibration-v4/*.json
+            ${{ runner.temp }}/s9-v4-pre-authorization-report.json
+            exact-commit.txt
+            exact-submodules.txt
+          if-no-files-found: error
+          retention-days: 90

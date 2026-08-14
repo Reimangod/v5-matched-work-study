@@ -1,0 +1,83 @@
+name: V5 S9 v2 remediation gate
+
+on:
+  pull_request:
+  push:
+    tags:
+      - "**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  s9-v2-remediation-gate:
+    name: s9-v2-remediation-gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      EXACT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      OMP_NUM_THREADS: "2"
+      OPENBLAS_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
+      PYTHONPATH: ${{ github.workspace }}/src:${{ github.workspace }}/provenance/dvg-obs-ceo/src:${{ github.workspace }}/provenance/dvg-obs-ceo/vendor/ceo-adapt-vqe
+
+    steps:
+      - name: Checkout exact commit and recursive provenance
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_SHA }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Require checkout to equal requested exact commit
+        run: test "$(git rev-parse HEAD)" = "$EXACT_SHA"
+
+      - name: Fetch recursive provenance tags
+        run: git submodule foreach --recursive 'git fetch --force --tags origin'
+
+      - name: Set up pinned Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10.19"
+
+      - name: Set up pinned uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.9.8"
+          enable-cache: true
+
+      - name: Sync pinned parent baseline environment
+        working-directory: provenance/dvg-obs-ceo
+        run: uv sync --frozen --extra baseline
+
+      - name: Run S9 v1 halt and v2 remediation tests
+        run: provenance/dvg-obs-ceo/.venv/bin/python -m pytest -q tests/test_v5_final_s9_h2_h4_calibration_runner.py
+
+      - name: Reconstruct immutable S9 v1 halt
+        run: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_v1_zero_dimensional_halt
+
+      - name: Reconstruct isolated S9 v2 current-progress audit
+        run: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner_v2 --ci-audit-output s9-v2-release-gate-report.json
+
+      - name: Require remediation integrity and keep downstream work blocked
+        run: |
+          provenance/dvg-obs-ceo/.venv/bin/python -c 'import json; report = json.load(open("s9-v2-release-gate-report.json")); assert report["schema"] == "v5-final.s9-h2-h4-ci-audit.v1"; assert report["run_namespace"] == "s9-h2-h4-calibration-v2"; assert all(report["checks"].values()); assert all(report["halt_audit"].values()); assert all(report["v2_checks"].values()); assert report["remediation"]["v1_results_are_performance_evidence"] is False; assert report["authorization"]["development_queue_execution"] == "NOT_AUTHORIZED"; assert report["authorization"]["performance_claim"] == "NOT_AUTHORIZED"'
+
+      - name: Record exact commit and artifact hash
+        run: |
+          git rev-parse HEAD > exact-commit.txt
+          git submodule status --recursive > exact-submodules.txt
+          shasum -a 256 s9-v2-release-gate-report.json > s9-v2-release-gate-report.sha256
+
+      - name: Upload S9 v2 external CI attestation
+        uses: actions/upload-artifact@v4
+        with:
+          name: v5-s9-v2-remediation-gate-${{ env.EXACT_SHA }}
+          path: |
+            exact-commit.txt
+            exact-submodules.txt
+            s9-v2-release-gate-report.json
+            s9-v2-release-gate-report.sha256
+          if-no-files-found: error
+          retention-days: 90
