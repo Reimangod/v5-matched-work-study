@@ -2,6 +2,10 @@ name: V5 S9 v2 remediation gate
 
 on:
   pull_request:
+    paths:
+      - "src/v5_final/s9_h2_h4_calibration_runner.py"
+      - "src/v5_final/s9_h2_h4_calibration_runner_v2.py"
+      - "tests/test_v5_final_s9_h2_h4_calibration_runner.py"
   push:
     tags:
       - "**"
@@ -12,6 +16,7 @@ permissions:
 
 jobs:
   s9-v2-remediation-gate:
+    if: github.event_name != 'pull_request'
     name: s9-v2-remediation-gate
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -81,3 +86,7 @@ jobs:
             s9-v2-release-gate-report.sha256
           if-no-files-found: error
           retention-days: 90
+
+  formal-p7-successor:
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/v5-formal-p7-successor-reusable.yml
