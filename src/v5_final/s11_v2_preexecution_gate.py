@@ -18,8 +18,9 @@ from v5_matched_work.atomic_artifacts import canonical_json_bytes, write_json_ex
 from .s0_successor import ROOT
 
 
-OUTPUT_DIR = ROOT / "artifacts/v5-final/parent-native/s11-v2-preexecution-gate-v1"
-OUTPUT = OUTPUT_DIR / "p7-no-go-v1.json"
+LEGACY_OUTPUT = ROOT / "artifacts/v5-final/parent-native/s11-v2-preexecution-gate-v1/p7-no-go-v1.json"
+OUTPUT_DIR = ROOT / "artifacts/v5-final/parent-native/s11-v2-preexecution-gate-v2"
+OUTPUT = OUTPUT_DIR / "p7-no-go-v2.json"
 QUEUE_DIR = ROOT / "artifacts/v5-final/parent-native/s11-v2-queue-freeze-v1"
 QUEUE_PATH = QUEUE_DIR / "s11-v2-queue-v1.json"
 QUEUE_IDENTITY = QUEUE_DIR / "queue-byte-identity-v1.json"
@@ -175,7 +176,7 @@ def capture() -> dict[str, Any]:
         if not passed and name not in {"disk_free_at_least_35_GiB", "counter_completeness_passed"}:
             blockers.append("GATE_FAILED:" + name)
     body = {
-        "schema": "v5-final.s11-v2-p7-preexecution-gate.v1",
+        "schema": "v5-final.s11-v2-p7-preexecution-gate.v2",
         "stage": "P7_PREEXECUTION_GATE",
         "status": "NO_GO_S11_V2_CANDIDATE_OUTCOME_EXECUTION",
         "decision": "NO_GO" if blockers else "GO",
@@ -199,6 +200,7 @@ def capture() -> dict[str, Any]:
         "exact_environment": exact_environment,
         "tests": tests,
         "artifact_bindings": {
+            "p7_v1_predecessor_sha256": _sha(LEGACY_OUTPUT),
             "queue_sha256": _sha(QUEUE_PATH),
             "queue_digest": queue["queue_digest"],
             "queue_identity_sha256": _sha(QUEUE_IDENTITY),
@@ -242,6 +244,7 @@ def audit_frozen() -> dict[str, Any]:
         "queue_binding_current": artifact["artifact_bindings"]["queue_sha256"] == _sha(QUEUE_PATH),
         "calibration_binding_current": artifact["artifact_bindings"]["calibration_summary_sha256"] == _sha(CALIBRATION_SUMMARY),
         "design_binding_current": artifact["artifact_bindings"]["verifier_design_sha256"] == _sha(DESIGN),
+        "p7_v1_predecessor_preserved": artifact["artifact_bindings"]["p7_v1_predecessor_sha256"] == _sha(LEGACY_OUTPUT),
         "scientific_boundary_explicit": "not evidence" in artifact["scientific_boundary"],
     }
     if not all(checks.values()):
