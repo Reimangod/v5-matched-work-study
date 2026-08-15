@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import platform
 import re
@@ -18,9 +19,10 @@ from v5_matched_work.atomic_artifacts import canonical_json_bytes, write_json_ex
 from .s0_successor import ROOT
 
 
-LEGACY_OUTPUT = ROOT / "artifacts/v5-final/parent-native/s11-v2-preexecution-gate-v1/p7-no-go-v1.json"
-OUTPUT_DIR = ROOT / "artifacts/v5-final/parent-native/s11-v2-preexecution-gate-v2"
-OUTPUT = OUTPUT_DIR / "p7-no-go-v2.json"
+V1_OUTPUT = ROOT / "artifacts/v5-final/parent-native/s11-v2-preexecution-gate-v1/p7-no-go-v1.json"
+V2_OUTPUT = ROOT / "artifacts/v5-final/parent-native/s11-v2-preexecution-gate-v2/p7-no-go-v2.json"
+OUTPUT_DIR = ROOT / "artifacts/v5-final/parent-native/s11-v2-preexecution-gate-v3"
+OUTPUT = OUTPUT_DIR / "p7-no-go-v3.json"
 QUEUE_DIR = ROOT / "artifacts/v5-final/parent-native/s11-v2-queue-freeze-v1"
 QUEUE_PATH = QUEUE_DIR / "s11-v2-queue-v1.json"
 QUEUE_IDENTITY = QUEUE_DIR / "queue-byte-identity-v1.json"
@@ -79,9 +81,16 @@ def _run_tests() -> dict[str, Any]:
         "tests/test_v5_final_s11_v2_queue_freeze.py",
     ]
     command = [sys.executable, "-m", "pytest", "-q", *required_files]
+    environment = dict(os.environ)
+    frozen_threads = {
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+    }
+    environment.update(frozen_threads)
     completed = subprocess.run(
         command, cwd=ROOT, text=True, stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT, check=False,
+        stderr=subprocess.STDOUT, check=False, env=environment,
     )
     match = re.search(r"(\d+) passed", completed.stdout)
     return {
@@ -93,6 +102,7 @@ def _run_tests() -> dict[str, Any]:
         "passed": completed.returncode == 0 and match is not None,
         "scope": "P0-P6 remediation tests and their immutable artifact audits",
         "required_test_files": required_files,
+        "frozen_thread_environment": frozen_threads,
         "historical_closed_release_live_inventory_tests": "OUT_OF_SCOPE_BECAUSE_ADDITIVE_S11_V2_ARTIFACTS_MUST_NOT_REDEFINE_CLOSED_V1_RELEASE_INVENTORIES",
     }
 
@@ -176,7 +186,7 @@ def capture() -> dict[str, Any]:
         if not passed and name not in {"disk_free_at_least_35_GiB", "counter_completeness_passed"}:
             blockers.append("GATE_FAILED:" + name)
     body = {
-        "schema": "v5-final.s11-v2-p7-preexecution-gate.v2",
+        "schema": "v5-final.s11-v2-p7-preexecution-gate.v3",
         "stage": "P7_PREEXECUTION_GATE",
         "status": "NO_GO_S11_V2_CANDIDATE_OUTCOME_EXECUTION",
         "decision": "NO_GO" if blockers else "GO",
@@ -200,7 +210,8 @@ def capture() -> dict[str, Any]:
         "exact_environment": exact_environment,
         "tests": tests,
         "artifact_bindings": {
-            "p7_v1_predecessor_sha256": _sha(LEGACY_OUTPUT),
+            "p7_v1_predecessor_sha256": _sha(V1_OUTPUT),
+            "p7_v2_predecessor_sha256": _sha(V2_OUTPUT),
             "queue_sha256": _sha(QUEUE_PATH),
             "queue_digest": queue["queue_digest"],
             "queue_identity_sha256": _sha(QUEUE_IDENTITY),
@@ -244,7 +255,8 @@ def audit_frozen() -> dict[str, Any]:
         "queue_binding_current": artifact["artifact_bindings"]["queue_sha256"] == _sha(QUEUE_PATH),
         "calibration_binding_current": artifact["artifact_bindings"]["calibration_summary_sha256"] == _sha(CALIBRATION_SUMMARY),
         "design_binding_current": artifact["artifact_bindings"]["verifier_design_sha256"] == _sha(DESIGN),
-        "p7_v1_predecessor_preserved": artifact["artifact_bindings"]["p7_v1_predecessor_sha256"] == _sha(LEGACY_OUTPUT),
+        "p7_v1_predecessor_preserved": artifact["artifact_bindings"]["p7_v1_predecessor_sha256"] == _sha(V1_OUTPUT),
+        "p7_v2_predecessor_preserved": artifact["artifact_bindings"]["p7_v2_predecessor_sha256"] == _sha(V2_OUTPUT),
         "scientific_boundary_explicit": "not evidence" in artifact["scientific_boundary"],
     }
     if not all(checks.values()):
