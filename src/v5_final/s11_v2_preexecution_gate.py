@@ -147,7 +147,9 @@ def capture() -> dict[str, Any]:
         "recursive_dependency_checkout_clean": all(line and line[0] == " " for line in submodules),
         "exact_environment_lock_match": environment_lock_match,
         "tests_passed": tests["passed"],
-        "hash_manifests_passed": _manifest_ok(QUEUE_MANIFEST, root_relative_entries=False) and _manifest_ok(CALIBRATION_MANIFEST, root_relative_entries=False),
+        "hash_manifests_passed": _manifest_ok(
+            QUEUE_MANIFEST, root_relative_entries=False
+        ) and _manifest_ok(CALIBRATION_MANIFEST, root_relative_entries=True),
         "production_dense_expm_zero": calibration["production_dense_expm"] == 0 and all(item["verifier_componentwise_cap"]["N_dense_expm"] == 0 for item in queue["items"]),
         "checkpoint_resume_passed": calibration["checks"]["lih_resume_equals_uninterrupted"] is True and calibration["checks"]["lih_partial_was_checkpointed"] is True,
         "H2_H4_calibration_passed": all(calibration["checks"][key] is True for key in ("old_new_pass_fail_parity", "h2_byte_identical", "h4_byte_identical")),
