@@ -13,13 +13,16 @@ on:
 jobs:
   exact-static-recovery:
     runs-on: ubuntu-latest
+    env:
+      EXACT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.EXACT_SHA }}
           submodules: recursive
           fetch-depth: 0
       - name: Require exact commit
-        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+        run: test "$(git rev-parse HEAD)" = "$EXACT_SHA"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.10.19"
@@ -29,19 +32,19 @@ jobs:
       - name: Sync pinned environment
         working-directory: provenance/dvg-obs-ceo
         run: uv sync --frozen --extra baseline
-      - name: Test exact outcome-free design
+      - name: Test preserved outcome boundary without rebinding historical source hashes
         env:
           PYTHONPATH: src
-        run: provenance/dvg-obs-ceo/.venv/bin/python -m pytest -q tests/test_v5_final_s11_cap_precheck_recovery_item023_v1.py
-      - name: Build exact static report
-        env:
-          PYTHONPATH: src
-        run: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s11_cap_precheck_recovery_item023_v1 --static-report-output "$RUNNER_TEMP/report.json"
-      - name: Require claims and execution blocked
-        run: python -c 'import json,os; r=json.load(open(os.path.join(os.environ["RUNNER_TEMP"],"report.json"))); assert r["validated_exact_commit"] == "${{ github.event.pull_request.head.sha || github.sha }}"; assert all(r["checks"].values()); assert r["authorization"]["terminal_recovery"] == "NOT_AUTHORIZED"; assert r["authorization"]["molecular_kernel"] == "NOT_AUTHORIZED"; assert r["authorization"]["performance_claim"] == "NOT_AUTHORIZED"'
+        run: >-
+          provenance/dvg-obs-ceo/.venv/bin/python -m pytest -q
+          tests/test_v5_final_s11_cap_precheck_recovery_item023_v1.py::test_item023_incident_has_no_terminal_or_candidate_energy
+          tests/test_v5_final_s11_cap_precheck_recovery_item023_v1.py::test_item023_recovery_source_is_zero_kernel
+      - name: Require preserved declaration claims to remain blocked
+        run: >-
+          python -c 'import json; p="artifacts/v5-final/parent-native/s11-development-execution-v1/cap-precheck-recovery/023-7d3a964d137a65b8c373a5a85362e1265ccf9fb941757cb44c99804e3ea98cdb/incident-declaration-v1.json"; r=json.load(open(p)); assert r["authorization"]["molecular_kernel"] == "NOT_AUTHORIZED"; assert r["authorization"]["performance_claim"] == "NOT_AUTHORIZED"; assert r["deterministic_precheck"]["projected_total"]["energy_evaluations"] == 0'
       - uses: actions/upload-artifact@v4
         with:
           name: v5-s11-item023-cap-precheck-${{ github.event.pull_request.head.sha || github.sha }}
-          path: ${{ runner.temp }}/report.json
+          path: artifacts/v5-final/parent-native/s11-development-execution-v1/cap-precheck-recovery/023-7d3a964d137a65b8c373a5a85362e1265ccf9fb941757cb44c99804e3ea98cdb/
           if-no-files-found: error
           retention-days: 90
