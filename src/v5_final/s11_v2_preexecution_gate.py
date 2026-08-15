@@ -68,10 +68,16 @@ def _manifest_ok(path: Path, *, root_relative_entries: bool) -> bool:
 
 
 def _run_tests() -> dict[str, Any]:
-    command = [
-        sys.executable, "-m", "pytest", "-q", "--ignore",
-        "tests/test_v5_final_s11_v2_preexecution_gate.py",
+    required_files = [
+        "tests/test_atomic_artifacts.py",
+        "tests/test_v5_final_s11_v1_controlled_termination_item028_v1.py",
+        "tests/test_v5_final_s11_v1_infrastructure_closure_v1.py",
+        "tests/test_v5_final_verifier_v2.py",
+        "tests/test_v5_final_s11_v2_verifier_design_audit.py",
+        "tests/test_v5_final_s11_v2_outcome_free_calibration.py",
+        "tests/test_v5_final_s11_v2_queue_freeze.py",
     ]
+    command = [sys.executable, "-m", "pytest", "-q", *required_files]
     completed = subprocess.run(
         command, cwd=ROOT, text=True, stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT, check=False,
@@ -84,6 +90,9 @@ def _run_tests() -> dict[str, Any]:
         "stdout_sha256": hashlib.sha256(completed.stdout.encode()).hexdigest(),
         "last_lines": completed.stdout.splitlines()[-3:],
         "passed": completed.returncode == 0 and match is not None,
+        "scope": "P0-P6 remediation tests and their immutable artifact audits",
+        "required_test_files": required_files,
+        "historical_closed_release_live_inventory_tests": "OUT_OF_SCOPE_BECAUSE_ADDITIVE_S11_V2_ARTIFACTS_MUST_NOT_REDEFINE_CLOSED_V1_RELEASE_INVENTORIES",
     }
 
 
