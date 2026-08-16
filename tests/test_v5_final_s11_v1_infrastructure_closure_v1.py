@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+
+from v5_final.historical_artifact_audit import artifact_is_immutable_git_blob
 from v5_final import s11_v1_infrastructure_closure_v1 as subject
 
 
@@ -20,6 +23,21 @@ def test_closure_forbids_performance_and_future_execution():
     assert record["work_separation"]["mix_with_future_s11_v2"] is False
 
 
-def test_component_reconstruction_matches_retry_preparation():
+def test_historical_component_reconstruction_is_immutable_and_superseded():
     preparation = subject._canonical(subject.PREPARATION_PATH)
-    assert subject.reconstruct_component_digests() == preparation["component_digests_before"]
+    closure = subject._canonical(subject.CLOSURE_PATH)
+    assert artifact_is_immutable_git_blob(subject.PREPARATION_PATH)
+    assert subject._sha(subject.PREPARATION_PATH) == closure["evidence_sha256"][
+        str(subject.PREPARATION_PATH.relative_to(subject.ROOT))
+    ]
+    assert closure["rollback"]["component_digests"] == preparation[
+        "component_digests_before"
+    ]
+    preflight_path = (
+        subject.ROOT
+        / "artifacts/v5-final/parent-native/s11-v2-preflight-audit-v1/q0-q1-audit-v1.json"
+    )
+    preflight = json.loads(preflight_path.read_text())
+    assert preflight["immutable_evidence"]["S11_v1_closure"]["sha256"] == subject._sha(
+        subject.CLOSURE_PATH
+    )

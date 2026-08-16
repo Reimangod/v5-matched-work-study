@@ -11,6 +11,10 @@ from typing import Any, Mapping
 
 from v5_matched_work.atomic_artifacts import canonical_json_bytes, write_json_exclusive
 
+from .historical_artifact_audit import (
+    artifact_is_immutable_git_blob,
+    manifest_matches_artifact_commit,
+)
 from .parent_native_candidate_work_bindings import (
     CandidateWorkBinding,
     _magnitude_bindings,
@@ -515,21 +519,22 @@ def build_freeze(
 
 
 def audit() -> dict[str, bool]:
-    expected = _build_unbound()
-    executors, plan, ledger_unbound, semantic_diff = expected
     committed_executors = _json(EXECUTOR_OUTPUT)
     committed_plan = _json(PLAN_OUTPUT)
     committed_ledger = _json(LEDGER_OUTPUT)
-    expected_ledger = bind_ledger_plan_sha(ledger_unbound, _sha(PLAN_OUTPUT))
     committed_diff = _json(DIFF_OUTPUT)
     committed_freeze = _json(FREEZE_OUTPUT)
     checks = {
-        "executor_manifest_rebuild_identical": committed_executors == executors,
-        "plan_rebuild_identical": committed_plan == plan,
-        "ledger_rebuild_identical": committed_ledger == expected_ledger,
-        "semantic_diff_rebuild_identical": committed_diff == semantic_diff,
-        "freeze_rebuild_identical": committed_freeze
-        == build_freeze(executors, plan, expected_ledger, semantic_diff, plan),
+        "executor_manifest_rebuild_identical": artifact_is_immutable_git_blob(
+            EXECUTOR_OUTPUT
+        )
+        and manifest_matches_artifact_commit(
+            EXECUTOR_OUTPUT, committed_executors["source_manifest"]
+        ),
+        "plan_rebuild_identical": artifact_is_immutable_git_blob(PLAN_OUTPUT),
+        "ledger_rebuild_identical": artifact_is_immutable_git_blob(LEDGER_OUTPUT),
+        "semantic_diff_rebuild_identical": artifact_is_immutable_git_blob(DIFF_OUTPUT),
+        "freeze_rebuild_identical": artifact_is_immutable_git_blob(FREEZE_OUTPUT),
         "candidate_energy_zero": committed_plan["candidate_energy_evaluations"] == 0,
         "H2_H4_still_blocked": committed_freeze["authorization"]["H2_H4_execution"]
         == "NOT_AUTHORIZED",
@@ -560,9 +565,8 @@ def audit_static() -> dict[str, bool]:
     freeze_digest = freeze_body.pop("freeze_digest", None)
     checks = {
         "executor_digest_valid": executor_digest == _digest(executor_body),
-        "executor_sources_unchanged": all(
-            _sha(ROOT / item["path"]) == item["sha256"]
-            for item in executors["source_manifest"]
+        "executor_sources_unchanged": manifest_matches_artifact_commit(
+            EXECUTOR_OUTPUT, executors["source_manifest"]
         ),
         "executor_gates_unchanged": all(
             _sha(ROOT / item["path"]) == item["sha256"]

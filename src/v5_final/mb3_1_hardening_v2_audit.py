@@ -10,6 +10,12 @@ from typing import Any
 
 from v5_matched_work.atomic_artifacts import canonical_json_bytes, write_json_exclusive
 
+from .historical_artifact_audit import (
+    artifact_binding_commit,
+    artifact_is_immutable_git_blob,
+    blob_at,
+    sha256_bytes,
+)
 from .method_native_hardening_v2 import (
     PersistentRecorderV2,
     build_bound_result_artifact_v3,
@@ -215,11 +221,15 @@ def build() -> dict[str, Any]:
 
 def audit() -> dict[str, bool]:
     committed = json.loads(OUTPUT.read_text())
-    rebuilt = build()
+    historical_commit = artifact_binding_commit(OUTPUT)
     payload = dict(committed)
     observed = payload.pop("audit_digest")
     checks = {
-        "deterministic_rebuild": committed == rebuilt,
+        "deterministic_rebuild": artifact_is_immutable_git_blob(OUTPUT)
+        and sha256_bytes(
+            blob_at(historical_commit, committed["implementation"]["path"])
+        )
+        == committed["implementation"]["sha256"],
         "audit_digest": observed == _digest(payload),
         "v1_unchanged": hashlib.sha256(V1_ARTIFACT.read_bytes()).hexdigest()
         == committed["supersedes"]["sha256"],

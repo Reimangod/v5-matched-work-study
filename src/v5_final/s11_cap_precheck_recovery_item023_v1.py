@@ -19,6 +19,7 @@ from typing import Any, Mapping
 
 from v5_matched_work.atomic_artifacts import canonical_json_bytes, write_json_exclusive
 
+from .historical_artifact_audit import manifest_matches_artifact_commit
 from . import parent_native_execution_services as services
 from .parent_native_persistent_runner import ParentNativePersistentRunner, replay_raw_ledger
 from .parent_native_work_accounting import ComponentwiseCapRejected, work_cap_digest
@@ -266,9 +267,8 @@ def audit_declaration(record: Mapping[str, Any] | None = None) -> dict[str, bool
         "append_only_no_kernel_policy": declaration.get("recovery_policy", {}).get(
             "retry_or_molecular_kernel"
         ) is False,
-        "recovery_sources_unchanged": all(
-            _sha(ROOT / entry["path"]) == entry["sha256"]
-            for entry in declaration["recovery_source_manifest"]
+        "recovery_sources_unchanged": manifest_matches_artifact_commit(
+            DECLARATION_PATH, declaration["recovery_source_manifest"]
         ),
         "claims_blocked": declaration.get("authorization", {}).get("performance_claim")
         == "NOT_AUTHORIZED"

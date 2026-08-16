@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 from v5_matched_work.atomic_artifacts import canonical_json_bytes, write_json_exclusive
 
+from .historical_artifact_audit import manifest_matches_commit
 from .p0_capacity_success_v3 import REQUIRED_FREE_BYTES, RESERVE_BYTES
 from .parent_native_candidate_work_bindings import build_candidate_work_binding
 from .parent_native_runtime_factory import CandidateOutcomeNotAuthorized
@@ -528,9 +529,8 @@ def audit(*, require_current_capacity: bool = True) -> dict[str, bool]:
             _sha(ROOT / item["path"]) == item["sha256"]
             for item in artifact["gate_artifact_manifest"]
         ),
-        "implementation_sources_unchanged": all(
-            _sha(ROOT / item["path"]) == item["sha256"]
-            for item in artifact["implementation_manifest"]
+        "implementation_sources_unchanged": manifest_matches_commit(
+            artifact["implementation_manifest"], implementation_commit
         ),
         "implementation_commit_is_ancestor": subprocess.run(
             [

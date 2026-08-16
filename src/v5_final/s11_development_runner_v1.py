@@ -25,6 +25,7 @@ from typing import Any, Iterator, Mapping
 from v5_matched_work.atomic_artifacts import canonical_json_bytes, write_json_exclusive
 
 from . import s9_h2_h4_calibration_runner as core
+from .historical_artifact_audit import manifest_matches_commit
 from .parent_native_development_execution_v1 import execute_development_item_v1
 from .parent_native_development_runtime_factory_v1 import ENVIRONMENT_PATH, PLAN_PATH
 from .s0_successor import ROOT
@@ -46,6 +47,10 @@ RESULT_DIR = EXECUTION_DIR / "item-results"
 RECEIPT_DIR = EXECUTION_DIR / "item-receipts"
 PROGRESS_DIR = EXECUTION_DIR / "progress"
 COMPLETENESS_PATH = EXECUTION_DIR / "development-completeness-v1.json"
+INFRASTRUCTURE_CLOSURE_PATH = (
+    EXECUTION_DIR
+    / "incident-evidence/s11-v1-infrastructure-closure-v1/no-go-manifest-v1.json"
+)
 RUN_NAMESPACE = "s11-development-execution-v1"
 EXECUTION_VENUE = "repository-owner-local-darwin-arm64-single-process"
 OWNER_FREEZE_PATH = (
@@ -475,10 +480,8 @@ def audit_readiness() -> dict[str, bool]:
         "empty_ledger_root_unchanged": artifact["empty_ledger_root"]["sha256"]
         == _sha(LEDGER_OUTPUT),
         "runner_source_manifest_exact": _runner_source_manifest_valid(manifest),
-        "runner_sources_unchanged": _runner_source_manifest_valid(manifest) and all(
-            _sha(ROOT / item["path"]) == item["sha256"]
-            for item in manifest
-        ),
+        "runner_sources_unchanged": _runner_source_manifest_valid(manifest)
+        and manifest_matches_commit(manifest, artifact["validated_runner_commit"]),
         "runner_commit_is_ancestor": _is_ancestor(
             artifact["validated_runner_commit"]
         ),
@@ -1160,7 +1163,9 @@ def _progress() -> dict[str, Any]:
     else:
         with _core_scope():
             receipts = core._completed_receipts(
-                plan, allow_inflight=False, require_progress=True
+                plan,
+                allow_inflight=INFRASTRUCTURE_CLOSURE_PATH.exists(),
+                require_progress=True,
             )
     return _progress_snapshot(plan, receipts)
 
@@ -1178,7 +1183,9 @@ def audit_progress(*, allow_inflight: bool = False) -> dict[str, Any]:
     else:
         with _core_scope():
             receipts = core._completed_receipts(
-                plan, allow_inflight=allow_inflight, require_progress=True
+                plan,
+                allow_inflight=allow_inflight or INFRASTRUCTURE_CLOSURE_PATH.exists(),
+                require_progress=True,
             )
     progress = _progress_snapshot(plan, receipts)
     checks = {

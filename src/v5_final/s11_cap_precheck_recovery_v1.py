@@ -13,6 +13,7 @@ from typing import Any, Mapping
 
 from v5_matched_work.atomic_artifacts import canonical_json_bytes, write_json_exclusive
 
+from .historical_artifact_audit import manifest_matches_artifact_commit
 from . import parent_native_execution_services as services
 from .parent_native_persistent_runner import ParentNativePersistentRunner, replay_raw_ledger
 from .parent_native_work_accounting import ComponentwiseCapRejected, work_cap_digest
@@ -274,7 +275,9 @@ def audit_declaration(record: Mapping[str, Any] | None = None) -> dict[str, bool
         "recovery_sources_unchanged": [
             entry["path"] for entry in declaration["recovery_source_manifest"]
         ] == [str(path.relative_to(ROOT)) for path in RECOVERY_SOURCES]
-        and all(_sha(ROOT / entry["path"]) == entry["sha256"] for entry in declaration["recovery_source_manifest"]),
+        and manifest_matches_artifact_commit(
+            DECLARATION_PATH, declaration["recovery_source_manifest"]
+        ),
         "claims_blocked": declaration.get("authorization") == {
             "terminal_recovery": "NOT_AUTHORIZED_PENDING_EXACT_CI_AND_OWNER_ARTIFACT",
             "molecular_kernel": "NOT_AUTHORIZED",

@@ -14,6 +14,7 @@ from typing import Any, Callable, Mapping
 
 from v5_matched_work.atomic_artifacts import canonical_json_bytes, write_json_exclusive
 
+from .historical_artifact_audit import manifest_matches_commit
 from .p0_capacity_success_v3 import REQUIRED_FREE_BYTES, RESERVE_BYTES
 from .parent_native_execution_services import execute_frozen_item
 from .parent_native_persistent_runner import (
@@ -264,9 +265,8 @@ def audit_readiness() -> dict[str, bool]:
         and artifact["plan"]["plan_digest"] == plan["plan_digest"],
         "S8_v2_GO_unchanged": artifact["S8_v2_GO"]["sha256"] == _sha(GO_PATH)
         and artifact["S8_v2_GO"]["gate_digest"] == gate["gate_digest"],
-        "runner_sources_unchanged": all(
-            _sha(ROOT / item["path"]) == item["sha256"]
-            for item in artifact["runner_source_manifest"]
+        "runner_sources_unchanged": manifest_matches_commit(
+            artifact["runner_source_manifest"], artifact["validated_runner_commit"]
         ),
         "runner_commit_is_ancestor": subprocess.run(
             [

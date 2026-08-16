@@ -23,6 +23,7 @@ from typing import Any, Iterator, Mapping
 from v5_matched_work.atomic_artifacts import canonical_json_bytes, write_json_exclusive
 
 from . import s9_h2_h4_calibration_runner as v1
+from .historical_artifact_audit import manifest_matches_commit
 from .parent_native_zero_dimensional_v2 import execute_frozen_item_v2
 from .s0_successor import ROOT
 from .s9_v5_platform_halt import HALT_PATH, audit_halt
@@ -380,9 +381,9 @@ def audit_readiness() -> dict[str, bool]:
         "S8_v2_GO_unchanged": artifact["S8_v2_GO"]["sha256"]
         == _sha(v1.GO_PATH)
         and artifact["S8_v2_GO"]["gate_digest"] == gate["gate_digest"],
-        "runner_sources_unchanged": all(
-            _sha(ROOT / item["path"]) == item["sha256"]
-            for item in artifact["runner_source_manifest"]
+        "runner_sources_match_validated_commit": manifest_matches_commit(
+            artifact["runner_source_manifest"],
+            artifact["validated_runner_commit"],
         ),
         "runner_commit_is_ancestor": _is_ancestor(
             artifact["validated_runner_commit"]

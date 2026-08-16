@@ -22,6 +22,7 @@ import numpy as np
 
 from v5_matched_work.atomic_artifacts import canonical_json_bytes, write_json_exclusive
 
+from .historical_artifact_audit import manifest_matches_artifact_commit, manifest_matches_commit
 from . import parent_native_execution_services as services
 from . import s9_h2_h4_calibration_runner as core
 from .parent_native_development_execution_v1 import development_runtime_scope
@@ -42,6 +43,7 @@ from .s11_development_runner_v1 import (
     FREEZE_OUTPUT,
     PLAN_PATH,
     RAW_DIR,
+    READINESS_PATH,
     RECEIPT_DIR,
     RESULT_DIR,
     RUNNER_SOURCES,
@@ -292,17 +294,16 @@ def audit_declaration(record: Mapping[str, Any] | None = None) -> dict[str, bool
             for entry in declaration["frozen_runner_source_manifest"]
         ]
         == [str(path.relative_to(ROOT)) for path in RUNNER_SOURCES]
-        and all(
-            _sha(ROOT / entry["path"]) == entry["sha256"]
-            for entry in declaration["frozen_runner_source_manifest"]
+        and manifest_matches_commit(
+            declaration["frozen_runner_source_manifest"],
+            _json(READINESS_PATH)["validated_runner_commit"],
         ),
         "recovery_sources_unchanged": [
             entry["path"] for entry in declaration["recovery_source_manifest"]
         ]
         == [str(path.relative_to(ROOT)) for path in RECOVERY_SOURCES]
-        and all(
-            _sha(ROOT / entry["path"]) == entry["sha256"]
-            for entry in declaration["recovery_source_manifest"]
+        and manifest_matches_artifact_commit(
+            DECLARATION_PATH, declaration["recovery_source_manifest"]
         ),
         "claims_blocked": declaration.get("authorization")
         == {

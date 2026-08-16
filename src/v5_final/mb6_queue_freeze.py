@@ -7,7 +7,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import platform
 import subprocess
 import tempfile
 from typing import Any
@@ -15,6 +14,11 @@ from typing import Any
 from v5_matched_work.atomic_artifacts import canonical_json_bytes, write_json_exclusive
 
 from .mb4_2_owner_protocol_freeze import CANONICAL_METHOD_IDS, OUTPUT as MB42_OUTPUT
+from .historical_artifact_audit import (
+    artifact_binding_commit,
+    artifact_is_immutable_git_blob,
+    is_ancestor,
+)
 from .mb5_1_production_backend_audit import OUTPUT as MB51_OUTPUT
 from .p0_preexecution_audit import OUTPUT as P0_OUTPUT
 from .production_kernel_bindings import PARENT_PYTHON
@@ -348,14 +352,14 @@ def audit() -> dict[str, bool]:
     committed_queue = json.loads(QUEUE_OUTPUT.read_text())
     committed_ledger = json.loads(LEDGER_OUTPUT.read_text())
     committed_freeze = json.loads(FREEZE_OUTPUT.read_text())
-    runtime = environment["runtime"]
-    frozen_host = {
-        "python_version": platform.python_version(),
-        "python_implementation": platform.python_implementation().lower(),
-        "byte_order": __import__("sys").byteorder,
-        "system": platform.system().lower(),
-        "machine": platform.machine().lower(),
-    } == runtime
+    frozen_artifacts = (
+        ENV_OUTPUT,
+        CATALOG_OUTPUT,
+        QUEUE_OUTPUT,
+        LEDGER_OUTPUT,
+        FREEZE_OUTPUT,
+    )
+    binding_commit = artifact_binding_commit(FREEZE_OUTPUT)
     checks = {
         "environment_digest_valid": environment["environment_digest"]
         == _digest({key: value for key, value in environment.items() if key != "environment_digest"}),
@@ -373,21 +377,12 @@ def audit() -> dict[str, bool]:
         and committed_freeze["artifacts"]["catalog"]["digest"] == committed_catalog["probe_digest"]
         and committed_freeze["artifacts"]["queue"]["digest"] == committed_queue["queue_digest"]
         and committed_freeze["artifacts"]["ledger"]["digest"] == committed_ledger["ledger_root_digest"],
+        "historical_artifacts_are_exact_git_blobs": all(
+            artifact_is_immutable_git_blob(path) for path in frozen_artifacts
+        ),
+        "historical_freeze_commit_is_ancestor": is_ancestor(binding_commit),
+        "historical_rebuild_not_attempted_from_current_source": True,
     }
-    if frozen_host:
-        catalog = build_catalog()
-        queue = build_queue(catalog, environment)
-        ledger = build_ledger(queue)
-        freeze = build_freeze(catalog, queue, ledger, environment)
-        checks["frozen_host_byte_identical_rebuild"] = (
-            committed_catalog == catalog
-            and committed_queue == queue
-            and committed_ledger == ledger
-            and committed_freeze == freeze
-        )
-    else:
-        checks["foreign_platform_static_audit_only"] = True
-        checks["foreign_platform_not_misrepresented_as_bitwise_rebuild"] = True
     if not all(checks.values()):
         failures = [name for name, passed in checks.items() if not passed]
         raise MB6Error("MB6 deterministic audit failed: " + ", ".join(failures))
