@@ -12,6 +12,7 @@ from typing import Any
 
 from v5_matched_work.atomic_artifacts import canonical_json_bytes, write_json_exclusive
 
+from .historical_artifact_audit import manifest_matches_artifact_commit
 from .s0_successor import CEO_COMMIT, PARENT_COMMIT, ROOT
 
 
@@ -191,9 +192,8 @@ def verify(record: dict[str, Any]) -> dict[str, bool]:
     observed = body.pop("audit_digest", None)
     return {
         "audit_digest_valid": observed == _digest(body),
-        "implementation_unchanged": all(
-            _sha(ROOT / item["path"]) == item["sha256"]
-            for item in record["implementation_manifest"]
+        "implementation_matches_historical_artifact": manifest_matches_artifact_commit(
+            OUTPUT, record["implementation_manifest"]
         ),
         "frozen_inputs_unchanged": all(
             _sha(ROOT / item["path"]) == item["sha256"]

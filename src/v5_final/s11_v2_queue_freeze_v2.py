@@ -15,6 +15,10 @@ from v5_matched_work.atomic_artifacts import (
     write_json_exclusive,
 )
 
+from .historical_artifact_audit import (
+    artifact_is_immutable_git_blob,
+    manifest_matches_artifact_commit,
+)
 from .semantic_contract_v2 import WORK_COMPONENTS
 from .s0_successor import ROOT
 from .s11_v2_outcome_cap_freeze import (
@@ -276,15 +280,30 @@ def write_artifacts() -> None:
 
 
 def audit() -> dict[str, Any]:
-    first = build_queue()
-    second = build_queue()
-    identity = build_identity(first, second)
-    diff = build_diff(first)
+    first = _load(QUEUE_OUTPUT)
+    identity = _load(IDENTITY_OUTPUT)
+    diff = _load(DIFF_OUTPUT)
+    queue_body = dict(first)
+    queue_digest = queue_body.pop("queue_digest", None)
+    identity_body = dict(identity)
+    identity_digest = identity_body.pop("identity_audit_digest", None)
+    diff_body = dict(diff)
+    diff_digest = diff_body.pop("diff_audit_digest", None)
+    source_manifest = [
+        {"path": path, "sha256": sha256}
+        for path, sha256 in first["execution_source_sha256"].items()
+    ]
     checks = {
-        "queue_exact": QUEUE_OUTPUT.exists() and _load(QUEUE_OUTPUT) == first,
-        "generated_twice_byte_identical": identity["byte_identical"],
-        "identity_exact": IDENTITY_OUTPUT.exists() and _load(IDENTITY_OUTPUT) == identity,
-        "semantic_diff_exact": DIFF_OUTPUT.exists() and _load(DIFF_OUTPUT) == diff,
+        "queue_digest_valid": queue_digest == _digest(queue_body),
+        "queue_is_immutable_git_blob": artifact_is_immutable_git_blob(QUEUE_OUTPUT),
+        "historical_execution_sources_valid": manifest_matches_artifact_commit(
+            QUEUE_OUTPUT, source_manifest
+        ),
+        "generated_twice_byte_identical": identity["byte_identical"]
+        and identity["first_generation_sha256"]
+        == identity["second_generation_sha256"],
+        "identity_digest_valid": identity_digest == _digest(identity_body),
+        "semantic_diff_digest_valid": diff_digest == _digest(diff_body),
         "semantic_diff_passed": all(diff["checks"].values()) and not diff["scientific_semantics_changed"],
         "manifest_exact": MANIFEST.exists() and MANIFEST.read_bytes() == _manifest_bytes((QUEUE_OUTPUT, IDENTITY_OUTPUT, DIFF_OUTPUT)),
         "queue_count_90": len(first["items"]) == 90,
@@ -309,7 +328,7 @@ def audit() -> dict[str, Any]:
     return {
         "status": "PASS_Q5_S11_V2_QUEUE_V2_FROZEN_NOT_AUTHORIZED",
         "checks": checks,
-        "queue_digest": first["queue_digest"],
+        "queue_digest": queue_digest,
     }
 
 

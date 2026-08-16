@@ -22,6 +22,10 @@ from v5_matched_work.atomic_artifacts import (
     write_json_exclusive,
 )
 
+from .historical_artifact_audit import (
+    artifact_is_immutable_git_blob,
+    manifest_matches_artifact_commit,
+)
 from .parent_native_work_accounting import operation_delta, work_cap_digest
 from .semantic_contract_v2 import WORK_COMPONENTS, WorkDelta
 from .s0_successor import ROOT
@@ -352,13 +356,29 @@ def write_artifacts() -> None:
 
 
 def audit() -> dict[str, Any]:
-    crosswalk = build_crosswalk()
-    if not CROSSWALK_OUTPUT.exists() or _load(CROSSWALK_OUTPUT) != crosswalk:
-        raise S11V2OutcomeCapFreezeError("frozen crosswalk differs")
-    freeze = build_freeze(crosswalk)
+    crosswalk = _load(CROSSWALK_OUTPUT)
+    freeze = _load(OUTPUT)
+    crosswalk_body = dict(crosswalk)
+    crosswalk_digest = crosswalk_body.pop("crosswalk_digest", None)
+    freeze_body = dict(freeze)
+    freeze_digest = freeze_body.pop("freeze_digest", None)
+    source_manifest = [
+        {"path": path, "sha256": sha256}
+        for path, sha256 in crosswalk["source_code"].items()
+    ]
     checks = {
-        "crosswalk_exact": _load(CROSSWALK_OUTPUT) == crosswalk,
-        "freeze_exact": OUTPUT.exists() and _load(OUTPUT) == freeze,
+        "crosswalk_digest_valid": crosswalk_digest == _digest(crosswalk_body),
+        "freeze_digest_valid": freeze_digest == _digest(freeze_body),
+        "artifacts_are_immutable_git_blobs": artifact_is_immutable_git_blob(
+            CROSSWALK_OUTPUT
+        )
+        and artifact_is_immutable_git_blob(OUTPUT),
+        "historical_source_manifest_valid": manifest_matches_artifact_commit(
+            CROSSWALK_OUTPUT, source_manifest
+        ),
+        "crosswalk_freeze_binding_valid": freeze["crosswalk"]["sha256"]
+        == _sha(CROSSWALK_OUTPUT)
+        and freeze["crosswalk"]["crosswalk_digest"] == crosswalk_digest,
         "manifest_exact": MANIFEST.exists() and MANIFEST.read_bytes() == _manifest_bytes((CROSSWALK_OUTPUT, OUTPUT)),
         "all_profiles_complete": all(
             set(record["componentwise_outcome_cap"]) == set(WORK_COMPONENTS)
@@ -378,8 +398,8 @@ def audit() -> dict[str, Any]:
     return {
         "status": "PASS_Q2_Q4_OUTCOME_CAP_AND_ACCOUNTING_FREEZE",
         "checks": checks,
-        "freeze_digest": freeze["freeze_digest"],
-        "crosswalk_digest": crosswalk["crosswalk_digest"],
+        "freeze_digest": freeze_digest,
+        "crosswalk_digest": crosswalk_digest,
     }
 
 

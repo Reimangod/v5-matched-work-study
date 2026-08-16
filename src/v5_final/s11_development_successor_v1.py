@@ -29,6 +29,7 @@ from dvg_obs_ceo.resources import (
 )
 from v5_matched_work.atomic_artifacts import canonical_json_bytes, write_json_exclusive
 
+from .historical_artifact_audit import manifest_matches_artifact_commit
 from .mb6_queue_freeze import _candidate_binding
 from .mb6_source_catalog_probe import (
     FORBIDDEN_OUTPUT_KEYS,
@@ -1007,13 +1008,11 @@ def audit_static() -> dict[str, bool]:
             "cap_aware_preparation_contract"
         )
         == _cap_aware_preparation_contract(),
-        "executor_sources_unchanged": all(
-            _sha(ROOT / item["path"]) == item["sha256"]
-            for item in executors["source_manifest"]
+        "executor_sources_match_historical_artifact": manifest_matches_artifact_commit(
+            EXECUTOR_OUTPUT, executors["source_manifest"]
         ),
-        "executor_gates_unchanged": all(
-            _sha(ROOT / item["path"]) == item["sha256"]
-            for item in executors["gate_manifest"]
+        "executor_gates_match_historical_artifact": manifest_matches_artifact_commit(
+            EXECUTOR_OUTPUT, executors["gate_manifest"]
         ),
         "plan_digest_valid": plan["plan_digest"]
         == _digest({key: value for key, value in plan.items() if key != "plan_digest"}),

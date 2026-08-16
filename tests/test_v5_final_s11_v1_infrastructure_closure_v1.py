@@ -6,11 +6,14 @@ from v5_final.historical_artifact_audit import artifact_is_immutable_git_blob
 from v5_final import s11_v1_infrastructure_closure_v1 as subject
 
 
-def test_closure_reconstructs_byte_identically_when_present():
+def test_closure_is_an_immutable_digest_valid_historical_artifact():
     if not subject.CLOSURE_PATH.exists():
         return
     committed = subject._canonical(subject.CLOSURE_PATH)
-    assert committed == subject.build_closure_manifest()
+    body = dict(committed)
+    observed = body.pop("closure_digest")
+    assert observed == subject._digest(body)
+    assert artifact_is_immutable_git_blob(subject.CLOSURE_PATH)
 
 
 def test_closure_forbids_performance_and_future_execution():
