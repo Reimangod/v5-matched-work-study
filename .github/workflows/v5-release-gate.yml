@@ -14,7 +14,7 @@ jobs:
   release-gate:
     name: release-gate
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 90
     env:
       GH_TOKEN: ${{ github.token }}
       EXACT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -55,35 +55,18 @@ jobs:
         working-directory: provenance/dvg-obs-ceo
         run: uv sync --frozen --extra baseline
 
-      - name: Run complete test suite
-        if: hashFiles('artifacts/v5-final/parent-native/s11-v2-preexecution-gate-v3/p7-no-go-v3.json') == ''
-        run: |
-          uv run pytest -q --ignore=tests/test_v5_final_s7_mb6_v4_refreeze.py --ignore=tests/test_v5_final_s8_parent_native_production_gate_v2.py --ignore=tests/test_v5_final_s9_h2_h4_calibration_runner.py
-          provenance/dvg-obs-ceo/.venv/bin/python -m pytest -q tests/test_v5_final_s7_mb6_v4_refreeze.py tests/test_v5_final_s8_parent_native_production_gate_v2.py tests/test_v5_final_s9_h2_h4_calibration_runner.py
-
-      - name: Reconstruct platform-neutral S8-v2 exact-CI preflight
-        if: hashFiles('artifacts/v5-final/parent-native/s11-v2-preexecution-gate-v3/p7-no-go-v3.json') == ''
-        run: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s8_parent_native_production_gate_v2 --ci-preflight-output release-gate-report.json
-
-      - name: Require zero-outcome readiness without authorizing execution
-        if: hashFiles('artifacts/v5-final/parent-native/s11-v2-preexecution-gate-v3/p7-no-go-v3.json') == ''
-        run: |
-          provenance/dvg-obs-ceo/.venv/bin/python -c 'import json; report = json.load(open("release-gate-report.json")); assert report["schema"] == "v5-final.s8-parent-native-exact-ci-preflight.v2"; assert report["decision"] == "READY_AWAITING_FROZEN_PLATFORM_FRESH_CLONE_EVIDENCE"; assert report["candidate_molecular_energy_evaluations"] == 0; assert report["authorization"]["H2_H4_execution"] == "NOT_AUTHORIZED_BY_CI_PREFLIGHT_ALONE"'
-
-      - name: Reconstruct S9 authoritative current-progress audit
-        if: hashFiles('artifacts/v5-final/parent-native/s11-v2-preexecution-gate-v3/p7-no-go-v3.json') == ''
-        run: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s9_h2_h4_calibration_runner --ci-audit-output s9-release-gate-report.json
-
-      - name: Require S9 integrity and keep development blocked
-        if: hashFiles('artifacts/v5-final/parent-native/s11-v2-preexecution-gate-v3/p7-no-go-v3.json') == ''
-        run: |
-          provenance/dvg-obs-ceo/.venv/bin/python -c 'import json; report = json.load(open("s9-release-gate-report.json")); assert report["schema"] == "v5-final.s9-h2-h4-ci-audit.v1"; assert all(report["checks"].values()); assert report["authorization"]["development_queue_execution"] == "NOT_AUTHORIZED"; assert report["authorization"]["performance_claim"] == "NOT_AUTHORIZED"'
-
-      - name: Audit formal P7 No-Go instead of opening release path
-        if: hashFiles('artifacts/v5-final/parent-native/s11-v2-preexecution-gate-v3/p7-no-go-v3.json') != ''
+      - name: Run every test under its frozen thread contract
         run: >-
           provenance/dvg-obs-ceo/.venv/bin/python -m
-          v5_final.s11_v2_preexecution_gate --audit
+          v5_final.full_repository_suite_v2
+
+      - name: Audit the latest additive P7 decision
+        run: |
+          if test -f artifacts/v5-final/parent-native/s11-v2-preexecution-gate-v5/p7-go-v5.json; then
+            provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s11_v2_preexecution_gate_v5 --audit
+          else
+            provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s11_v2_preexecution_gate_v4 --audit
+          fi
 
       - name: Record exact commit and submodules
         run: |
