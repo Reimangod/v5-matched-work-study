@@ -59,10 +59,16 @@ def frozen_environment(thread_count: int) -> dict[str, str]:
         raise FullRepositorySuiteError(f"unsupported frozen thread count: {thread_count}")
     environment = dict(os.environ)
     environment.update({key: str(thread_count) for key in THREAD_KEYS})
-    source_path = str(ROOT / "src")
+    source_paths = (
+        str(ROOT / "src"),
+        str(ROOT / "provenance/dvg-obs-ceo/src"),
+        str(ROOT / "provenance/dvg-obs-ceo/vendor/ceo-adapt-vqe"),
+    )
     existing = environment.get("PYTHONPATH")
     environment["PYTHONPATH"] = (
-        source_path if not existing else os.pathsep.join((source_path, existing))
+        os.pathsep.join(source_paths)
+        if not existing
+        else os.pathsep.join((*source_paths, existing))
     )
     return environment
 

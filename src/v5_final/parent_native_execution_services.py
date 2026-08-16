@@ -286,7 +286,47 @@ class ActualOptimizationBoundary:
     ) -> Any:
         from adaptvqe.minimize import minimize_bfgs
 
+        initial_array = np.asarray(initial, dtype=np.float64)
+        index_values = list(indices)
+        if initial_array.ndim != 1 or len(index_values) != len(initial_array):
+            raise ParentNativeExecutionError(
+                "optimizer coordinates and gradient dimension differ"
+            )
+        inverse_array = np.asarray(inverse_hessian, dtype=np.float64)
+        if inverse_array.shape != (len(initial_array), len(initial_array)):
+            raise ParentNativeExecutionError("optimizer inverse Hessian shape differs")
+        seeded_gradient = None if g0 is None else np.asarray(g0, dtype=np.float64)
+        if seeded_gradient is not None and seeded_gradient.shape != initial_array.shape:
+            raise ParentNativeExecutionError("optimizer initial gradient shape differs")
+        event_offset = len(self.boundary.events)
         self.boundary.invoke("optimizer-start", lambda: None)
+
+        energy_seed_available = f0 is not None
+        gradient_seed_available = seeded_gradient is not None
+
+        def objective(coordinates: Any, bound_indices: Sequence[int]) -> float:
+            nonlocal energy_seed_available
+            values = np.asarray(coordinates, dtype=np.float64)
+            if energy_seed_available:
+                if not np.array_equal(values, initial_array):
+                    raise ParentNativeExecutionError(
+                        "pinned BFGS requested a noninitial point before consuming f0"
+                    )
+                energy_seed_available = False
+                return float(f0)
+            return self.energy(values, bound_indices)
+
+        def jacobian(coordinates: Any, bound_indices: Sequence[int]) -> np.ndarray:
+            nonlocal gradient_seed_available
+            values = np.asarray(coordinates, dtype=np.float64)
+            if gradient_seed_available:
+                if not np.array_equal(values, initial_array):
+                    raise ParentNativeExecutionError(
+                        "pinned BFGS requested a noninitial point before consuming g0"
+                    )
+                gradient_seed_available = False
+                return np.asarray(seeded_gradient, dtype=np.float64).copy()
+            return self.gradient(values, bound_indices)
 
         def callback(result: Any) -> None:
             evidence = {
@@ -297,23 +337,39 @@ class ActualOptimizationBoundary:
                 "optimizer-iteration", lambda: None, evidence=evidence
             )
 
-        return minimize_bfgs(
-            lambda coordinates, bound_indices: self.energy(
-                coordinates, bound_indices
-            ),
-            np.asarray(initial, dtype=np.float64),
-            args=(list(indices),),
-            jac=lambda coordinates, bound_indices: self.gradient(
-                coordinates, bound_indices
-            ),
+        result = minimize_bfgs(
+            objective,
+            initial_array,
+            args=(index_values,),
+            jac=jacobian,
             callback=callback,
             gtol=1e-8,
             maxiter=1000,
             disp=False,
-            initial_inv_hessian=np.asarray(inverse_hessian, dtype=np.float64),
+            initial_inv_hessian=inverse_array,
             f0=f0,
-            g0=None if g0 is None else np.asarray(g0, dtype=np.float64),
+            g0=seeded_gradient,
         )
+        events = self.boundary.events[event_offset:]
+        counts = {
+            operation: sum(event.operation == operation for event in events)
+            for operation in (
+                "optimizer-start",
+                "optimizer-iteration",
+                "candidate-energy-evaluation",
+                "full-gradient-evaluation",
+            )
+        }
+        if (
+            counts["optimizer-start"] != 1
+            or counts["optimizer-iteration"] != int(result.nit)
+            or counts["candidate-energy-evaluation"] != int(result.nfev)
+            or counts["full-gradient-evaluation"] != int(result.njev)
+        ):
+            raise ParentNativeExecutionError(
+                "pinned BFGS result counters differ from durable kernel events"
+            )
+        return result
 
     def statevector(self, coordinates: Sequence[float], indices: Sequence[int]) -> np.ndarray:
         evidence: dict[str, Any] = {}
