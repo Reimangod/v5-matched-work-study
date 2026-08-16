@@ -1,0 +1,111 @@
+{
+  "schema": "v5-final.s11-item028-live-execution-evidence.v1",
+  "capture": {
+    "timestamp_utc": "2026-08-14T16:46:05Z",
+    "timestamp_asia_tokyo": "2026-08-15T01:46:05+0900",
+    "capture_kind": "OUTCOME_BLIND_LIVE_PROCESS_AND_APPEND_ONLY_LEDGER_SNAPSHOT",
+    "process_modified": false,
+    "signal_sent": false,
+    "active_ledger_modified_by_capture": false
+  },
+  "repository": {
+    "branch": "agent/v5-parent-native-study-v1",
+    "head": "a25f6a28262fabe3e190f5ea5e8c55b994fe9f2d",
+    "upstream_head": "a25f6a28262fabe3e190f5ea5e8c55b994fe9f2d",
+    "head_equals_upstream": true
+  },
+  "queue_item": {
+    "queue_index": 28,
+    "queue_item_id": "development-queue-item-v4:d37d71eb9ae63c6b6d90e26850e8cc845172577cb2e2f7b457dec40d2b0315b9",
+    "case_id": "h6-1.5",
+    "method_id": "v5-fixed-source-whitelist-no-replenishment",
+    "work_envelope": "MEDIUM",
+    "request_id": "parent-native-work-request-v1:26cec8b20b3a00fb35232833a515f391329ebc54ae2b0a0db3e786b6d35df6ce",
+    "attempt_ordinal": 2,
+    "attempt_id": "parent-native-attempt-v1:2bcfbcff2aa6a60904a6e3415253e68270b37f97ee72e9c6a2f2df87b51e68e6"
+  },
+  "live_process": {
+    "pid": 86211,
+    "ppid": 86202,
+    "pgid": 86202,
+    "launch_time_asia_tokyo": "2026-08-13T14:30:08+0900",
+    "elapsed_at_capture": "01-11:15:57",
+    "accumulated_cpu_time_at_capture": "1291:06.57",
+    "cpu_percent_at_capture": 87.7,
+    "state": "R",
+    "command": "provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s11_interruption_recovery_item028_v1 --execute-retry",
+    "sample_observation": "All sampled main-thread observations were inside scipy.linalg._matfuncs_expm.pick_pade_structure and OpenBLAS zgemm dense complex matrix multiplication.",
+    "interpretation": "ALIVE_CPU_BOUND_DENSE_MATRIX_EXPONENTIAL_NOT_IDLE"
+  },
+  "ledger_prefix": {
+    "directory": "artifacts/v5-final/parent-native/s11-development-execution-v1/raw-ledgers/028-d37d71eb9ae63c6b6d90e26850e8cc845172577cb2e2f7b457dec40d2b0315b9",
+    "record_count": 10,
+    "first_sequence": 0,
+    "last_sequence": 9,
+    "last_record_digest": "3245b16fec87f3a469a265ffb8c57d9946be4e4a83c97580a600e6063c931bab",
+    "attempt_1_rolled_back": true,
+    "attempt_2_active": true,
+    "attempt_2_completed_operations": [
+      "full-physical-resource-recount",
+      "statevector-recomputation"
+    ],
+    "candidate_energy_evaluation_units_in_attempt_2_prefix": 0,
+    "optimizer_iterations_in_attempt_2_prefix": 0,
+    "rewrite_verifications_in_attempt_2_prefix": 0,
+    "terminal_record_present_at_capture": false,
+    "checkpoint_present_at_capture": false,
+    "item_result_present_at_capture": false,
+    "item_receipt_present_at_capture": false
+  },
+  "ledger_file_sha256": {
+    "00000000-request-start.json": "890bd506572cc36e2ee991c93066bae882d6a2bd03528ea30f356194518d2e2a",
+    "00000001-attempt-start.json": "1dfac97e2b4a06b555cd483466fe70d9a9e7984889be7b46eacaaddadbd8cb96",
+    "00000002-kernel-event.json": "665c799a62dd7d568cf73cbf4c6bc3bfa0b2e5808202d80d1c40aae3cd72fe91",
+    "00000003-kernel-event.json": "a187f8f6c4b2d5493cfa7115b819edf05d90b72d6a0d27894eacefe6ff810084",
+    "00000004-kernel-event.json": "451861014f25996f5fb28278aaff2cbb36278bb1f44099cf6ff6d97d27528d3f",
+    "00000005-kernel-event.json": "f9265dbfc0e60b65cf1cecaeb412ad2ed5fb40aa2124771404b253c1bd33ae51",
+    "00000006-attempt-rollback.json": "97ac69d566c38e9f4b3ad0e8ef5ee8ef807790ba87d67864ebdab9cab5c72414",
+    "00000007-attempt-start.json": "9c2d724b137d02ac9ac993644d88bcc62e2ef722b102c126193d134a028354b5",
+    "00000008-kernel-event.json": "c3c9f1accb7b905ffe0237c199267eda957f6440de60f59b7709fe0b13caa2fb",
+    "00000009-kernel-event.json": "80352e29e9aa31b06379a56b398f9da3788aa2a39ef27775360642ada0a00a28"
+  },
+  "bound_code_and_environment": {
+    "python": "3.10.19",
+    "platform": "macOS-26.0.1-arm64-arm-64bit",
+    "numpy": "1.23.5",
+    "scipy": "1.10.1",
+    "openfermion": "1.5.1",
+    "qiskit": "0.24.2",
+    "src/v5_final/parent_native_executors.py": "c41747af4a23ddf080af6c2acefe10df45ca82ba6f3bf3fa29703242d72350fd",
+    "src/v5_final/parent_native_rewrite.py": "40708dba5ce5dba7907af8e34f365280bb9ec19e0c4be392553677ce4872c65a",
+    "src/v5_final/s11_interruption_recovery_item028_v1.py": "a823cb63b56ba4eaedd3f2a6709e9af3f2f0ec31c27bcfb0d04c594d6f87c65a",
+    "provenance/dvg-obs-ceo/src/dvg_obs_ceo/block_ir.py": "e245018b9915b371875ef3e717fd45099cd6999659076fa110a0688b0f682391",
+    "provenance/dvg-obs-ceo/uv.lock": "8a9021a72dd3bd6af8d8fc656d8f544adf620c1900c5ce081b26f484bbf6909d",
+    "uv.lock": "903584f4dc217af674dc07a4a3700e7d6b937fd7277cd08952bebd5dbe1c3814"
+  },
+  "supporting_evidence": {
+    "process-observation-v1.txt": "f2eb1283af4a929952194dd0ff7f215fe52b29776a0cf7cbfb91ae08e8a27684",
+    "process-sample-excerpt-v1.txt": "449969b16525b2d0ac7fe98407c93f17c56b5c689f6d7fb03fb7d2bbc0255b86"
+  },
+  "diagnostic_inference_not_performance_outcome": {
+    "class": "UNBOUNDED_DENSE_UNITARY_VERIFICATION_COST",
+    "basis": [
+      "parent_native_rewrite._generator_matrix converts sparse operators to dense arrays",
+      "validate_candidate_semantics constructs dense matrix exponentials for five samples",
+      "validate_target_circuit_semantics constructs dense expected unitaries for five samples",
+      "the live sample places the main thread in SciPy Pade selection and OpenBLAS dense complex matrix multiplication",
+      "structural binding persistence occurs only after prepare_method_executor returns"
+    ],
+    "scientific_status": "INFRASTRUCTURE_DIAGNOSTIC_ONLY",
+    "performance_negative_result": false
+  },
+  "claim_boundary": {
+    "candidate_energy_for_item_028_observed": false,
+    "FCI_reporting_performed": false,
+    "candidate_selection_changed": false,
+    "queue_order_changed": false,
+    "threshold_changed": false,
+    "performance_claim_authorized": false,
+    "allowed_claim": "At capture time, item 028 attempt 2 was alive and CPU-bound inside dense matrix-exponential verification before any candidate-energy or optimizer event was persisted."
+  }
+}

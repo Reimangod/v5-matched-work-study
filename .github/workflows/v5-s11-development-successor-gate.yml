@@ -1,0 +1,99 @@
+name: V5 S11 development successor gate
+
+on:
+  pull_request:
+  push:
+    tags:
+      - "**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  s11-development-successor-gate:
+    name: s11-development-successor-gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      EXACT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      PYTHONPATH: ${{ github.workspace }}/src:${{ github.workspace }}/provenance/dvg-obs-ceo/src:${{ github.workspace }}/provenance/dvg-obs-ceo/vendor/ceo-adapt-vqe
+
+    steps:
+      - name: Checkout exact commit and recursive provenance
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_SHA }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Require checkout to equal requested exact commit
+        run: test "$(git rev-parse HEAD)" = "$EXACT_SHA"
+
+      - name: Set up pinned Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10.19"
+
+      - name: Set up pinned uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.9.8"
+          enable-cache: true
+
+      - name: Sync pinned parent baseline environment
+        working-directory: provenance/dvg-obs-ceo
+        run: uv sync --frozen --extra baseline
+
+      - name: Run S11 successor tests
+        run: |
+          provenance/dvg-obs-ceo/.venv/bin/python -m pytest -q \
+            tests/test_v5_final_s11_development_successor_v1.py
+
+      - name: Audit frozen S11 successor without molecular kernels
+        if: hashFiles('artifacts/v5-final/parent-native/s11-development-queue-v4/development-outcome-blind-freeze-v4.json') != ''
+        run: |
+          provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s11_development_successor_v1 --static-audit
+
+      - name: Require execution and claims to remain blocked at freeze
+        if: hashFiles('artifacts/v5-final/parent-native/s11-development-queue-v4/development-outcome-blind-freeze-v4.json') != ''
+        run: |
+          provenance/dvg-obs-ceo/.venv/bin/python -c 'import json; artifact = json.load(open("artifacts/v5-final/parent-native/s11-development-queue-v4/development-outcome-blind-freeze-v4.json")); assert artifact["decision"] == "READY_FOR_S11_STATIC_EXACT_CI_ONLY"; assert artifact["candidate_molecular_energy_evaluations"] == 0; assert artifact["authorization"]["development_execution"] == "NOT_AUTHORIZED"; assert artifact["authorization"]["performance_claim"] == "NOT_AUTHORIZED"; assert all(artifact["checks"].values())'
+
+      - name: Build platform-neutral S11 runner audit
+        if: hashFiles('artifacts/v5-final/parent-native/s11-development-execution-v1/incident-evidence/s11-v1-infrastructure-closure-v1/no-go-manifest-v1.json') == ''
+        run: |
+          provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s11_development_runner_v1 \
+            --static-audit-output "$RUNNER_TEMP/s11-static-ci-report.json"
+
+      - name: Require S11 academic and systems boundary
+        if: hashFiles('artifacts/v5-final/parent-native/s11-development-execution-v1/incident-evidence/s11-v1-infrastructure-closure-v1/no-go-manifest-v1.json') == ''
+        run: |
+          provenance/dvg-obs-ceo/.venv/bin/python -c 'import json, os; report = json.load(open(os.path.join(os.environ["RUNNER_TEMP"], "s11-static-ci-report.json"))); progress = report["progress"]; assert report["validated_exact_commit"] == os.environ["EXACT_SHA"]; assert report["run_namespace"] == "s11-development-execution-v1"; assert progress["expected_item_count"] == 90; assert 0 <= progress["completed_terminal_count"] <= 90; assert all(report["checks"].values()); assert progress["FCI_reporting_performed"] is False; assert report["authorization"]["performance_claim"] == "NOT_AUTHORIZED"; assert (report["namespace_halted"] is True) or (progress["terminal_status_counts"]["KERNEL_FAILURE"] == 0 and progress["all_post_item_capacity_checks_passed"] is True)'
+
+      - name: Audit formal S11-v1 closure when present
+        if: hashFiles('artifacts/v5-final/parent-native/s11-development-execution-v1/incident-evidence/s11-v1-infrastructure-closure-v1/no-go-manifest-v1.json') != ''
+        env:
+          MKL_NUM_THREADS: "1"
+          OPENBLAS_NUM_THREADS: "1"
+          OMP_NUM_THREADS: "1"
+        run: >-
+          provenance/dvg-obs-ceo/.venv/bin/python -m
+          v5_final.s11_v1_infrastructure_closure_v1 --audit
+
+      - name: Record exact commit and submodules
+        run: |
+          git rev-parse HEAD > exact-commit.txt
+          git submodule status --recursive > exact-submodules.txt
+
+      - name: Upload static S11 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: v5-s11-static-${{ env.EXACT_SHA }}
+          path: |
+            artifacts/v5-final/parent-native/s11-development-queue-v4/
+            artifacts/v5-final/parent-native/s11-development-execution-v1/
+            exact-commit.txt
+            exact-submodules.txt
+          if-no-files-found: error
+          retention-days: 90

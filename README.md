@@ -1,6 +1,14 @@
 # V5 matched-work robustness study
 
-This is an independent, private-by-default study of sequential catalog
+> **Current release status:** pre-calibration infrastructure `No-Go`. The
+> independently reproducible tag is
+> [`v5-final-method-native-pre-calibration-no-go-v1`](https://github.com/Reimangod/v5-matched-work-study/tree/v5-final-method-native-pre-calibration-no-go-v1); the blocker and next
+> outcome-blind proposals are documented in
+> [`docs/MB4_METHOD_NATIVE_NO_GO.md`](docs/MB4_METHOD_NATIVE_NO_GO.md) and
+> [`docs/MB4_1_PROTOCOL_PROPOSALS.md`](docs/MB4_1_PROTOCOL_PROPOSALS.md).
+> There are no performance results and no authorized molecular execution.
+
+This is an independent, public, fail-closed study of sequential catalog
 rebuilding in V5 under componentwise matched-work envelopes.
 
 The historical `dvg-obs-ceo` repository is a read-only Git submodule pinned to
@@ -33,6 +41,14 @@ operation/delta semantics, and requires a nonempty frozen queue's count,
 canonical digest, and artifact SHA-256 in every production chain. No S5-v4
 queue exists, so production candidate-energy count is `null` and the gate still
 fails before S5.
+
+The additive MB3.1 hardening is documented in
+[`docs/MB3_1_LEDGER_HARDENING.md`](docs/MB3_1_LEDGER_HARDENING.md). It binds
+events to exact executor identities, forces request/result binding at the
+supported publication boundary, formalizes cap-rejected candidate expansion
+and retry lifecycle, and binds queue schema-audit evidence. MB4.1 records three
+outcome-blind protocol proposals, but their approval record is deliberately
+empty. The terminal decision therefore remains `No-Go`.
 
 ## S0 reproduction
 

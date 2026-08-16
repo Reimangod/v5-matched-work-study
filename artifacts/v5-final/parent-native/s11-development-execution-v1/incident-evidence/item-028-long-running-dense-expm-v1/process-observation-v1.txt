@@ -1,0 +1,21 @@
+Capture time UTC: 2026-08-14T16:46:05Z
+Capture time Asia/Tokyo: 2026-08-15T01:46:05+0900
+
+PID: 86211
+PPID: 86202
+PGID: 86202
+Launch time: Thu Aug 13 14:30:08 2026 Asia/Tokyo
+Elapsed: 01-11:15:57
+Accumulated CPU time: 1291:06.57
+CPU: 87.7 percent at the exact ps sample; repeated observations ranged from 87.7 to 100 percent
+RSS: 373360 KiB at the exact ps sample
+VSZ: 439479024 KiB
+State: R
+Command: provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s11_interruption_recovery_item028_v1 --execute-retry
+
+Repository branch: agent/v5-parent-native-study-v1
+Repository HEAD: a25f6a28262fabe3e190f5ea5e8c55b994fe9f2d
+Upstream HEAD: a25f6a28262fabe3e190f5ea5e8c55b994fe9f2d
+Filesystem: /dev/disk3s5, 460 GiB total, 380 GiB used, 20 GiB available, 95 percent capacity
+
+The process was observed alive and CPU-bound. No signal was sent and the active process was not modified during this capture.

@@ -1,0 +1,74 @@
+name: V5 S11 item 028 interruption recovery gate
+
+on:
+  pull_request:
+    paths:
+      - "src/v5_final/s11_interruption_recovery_item028_v1.py"
+      - "tests/test_v5_final_s11_interruption_recovery_item028_v1.py"
+  push:
+    branches:
+      - agent/v5-parent-native-study-v1
+
+permissions:
+  contents: read
+
+jobs:
+  s11-item028-interruption-recovery-gate:
+    if: github.event_name != 'pull_request'
+    name: s11-item028-interruption-recovery-gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      EXACT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      PYTHONPATH: ${{ github.workspace }}/src:${{ github.workspace }}/provenance/dvg-obs-ceo/src:${{ github.workspace }}/provenance/dvg-obs-ceo/vendor/ceo-adapt-vqe
+    steps:
+      - name: Checkout exact commit and recursive provenance
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_SHA }}
+          submodules: recursive
+          fetch-depth: 0
+      - name: Require checkout to equal requested exact commit
+        run: test "$(git rev-parse HEAD)" = "$EXACT_SHA"
+      - name: Set up pinned Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10.19"
+      - name: Set up pinned uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.9.8"
+          enable-cache: true
+      - name: Sync pinned parent baseline environment
+        working-directory: provenance/dvg-obs-ceo
+        run: uv sync --frozen --extra baseline
+      - name: Run outcome-free item 028 interruption recovery tests
+        run: >-
+          provenance/dvg-obs-ceo/.venv/bin/python -m pytest -q
+          tests/test_v5_final_s11_interruption_recovery_item028_v1.py
+      - name: Build exact static recovery report
+        run: >-
+          provenance/dvg-obs-ceo/.venv/bin/python -m
+          v5_final.s11_interruption_recovery_item028_v1 --static-report-output
+          s11-item028-interruption-recovery-static-ci-v1.json
+      - name: Require execution and claims to remain blocked
+        run: |
+          jq -e '
+            .status == "PASS_OUTCOME_FREE_INTERRUPTION_RECOVERY_DESIGN" and
+            .decision == "READY_AWAITING_OWNER_RECOVERY_AUTHORIZATION" and
+            ([.checks[]] | all) and
+            .authorization.rollback_or_retry == "NOT_AUTHORIZED" and
+            .authorization.candidate_energy == "NOT_AUTHORIZED" and
+            .authorization.FCI_reporting == "NOT_AUTHORIZED" and
+            .authorization.performance_claim == "NOT_AUTHORIZED"
+          ' s11-item028-interruption-recovery-static-ci-v1.json
+      - name: Upload exact static recovery evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: s11-item028-interruption-recovery-static-ci-v1
+          path: s11-item028-interruption-recovery-static-ci-v1.json
+          if-no-files-found: error
+
+  formal-p7-successor:
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/v5-formal-p7-successor-reusable.yml

@@ -1,0 +1,30 @@
+name: V5 formal P7 successor audit
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  formal-p7-successor-no-go:
+    name: formal-p7-successor-no-go
+    runs-on: ubuntu-24.04
+    env:
+      EXACT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      PYTHONPATH: ${{ github.workspace }}/src
+    steps:
+      - name: Checkout exact successor commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_SHA }}
+          submodules: false
+          fetch-depth: 1
+      - name: Require checkout to equal requested exact commit
+        run: test "$(git rev-parse HEAD)" = "$EXACT_SHA"
+      - name: Set up pinned Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10.19"
+      - name: Audit immutable P7 No-Go and zero-outcome boundary
+        run: python -m v5_final.s11_v2_preexecution_gate --audit
