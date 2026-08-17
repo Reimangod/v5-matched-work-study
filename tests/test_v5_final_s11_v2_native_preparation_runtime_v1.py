@@ -219,7 +219,10 @@ def test_actual_magnitude_builder_uses_analytic_deletion_and_no_outcome(
         hamiltonian_digest="6" * 64,
         source_checkpoint_digest="7" * 64,
         pool=SimpleNamespace(n=2),
-        runtime=SimpleNamespace(ansatz=source),
+        runtime=SimpleNamespace(
+            ansatz=source,
+            snapshot=lambda: SimpleNamespace(snapshot_digest="8" * 64),
+        ),
         _actual_algorithm=SimpleNamespace(n=2, ref_det=(1, 0)),
     )
     item = QueueV2NativeAdapter().first_request_for_method(
