@@ -1,32 +1,16 @@
 from v5_final.s11_v2_execution_readiness_v1 import (
     DECISION,
     OUTPUT,
-    _function_calls,
     audit_frozen,
-    inspect_readiness,
 )
-from v5_final.s11_v2_execution_readiness_v1 import (
-    EXECUTION_SERVICES,
-    EXECUTORS,
-    REWRITE,
-)
+from v5_final.s11_v2_execution_readiness_v2 import READINESS_V1
 
 
-def test_frozen_dynamic_path_conflict_is_detected_without_outcomes() -> None:
-    report = inspect_readiness()
+def test_historical_no_go_is_audited_at_its_commit_not_rebuilt_from_head() -> None:
+    report = audit_frozen()
+    assert report["decision"] == DECISION
     assert all(report["checks"].values())
-    assert report["observed_outcomes"] == {
-        "candidate_energy_evaluations": 0,
-        "optimizer_iterations": 0,
-        "FCI_evaluations": 0,
-    }
-    assert "_rank_parent_candidates" in _function_calls(
-        EXECUTION_SERVICES, "_dynamic_v5_preparation"
-    )
-    assert "prepare_rewrite_for_optimizer" in _function_calls(
-        EXECUTORS, "_rank_parent_candidates"
-    )
-    assert "toarray" in _function_calls(REWRITE, "_generator_matrix")
+    assert READINESS_V1 == OUTPUT
 
 
 def test_execution_readiness_lifecycle_is_no_go_before_or_audited_after_freeze() -> None:

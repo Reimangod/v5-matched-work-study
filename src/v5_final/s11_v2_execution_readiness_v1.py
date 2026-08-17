@@ -422,9 +422,12 @@ def audit_frozen(*, require_live: bool = False) -> dict[str, Any]:
         "cap_freeze_unchanged": bindings["outcome_cap_freeze_sha256"]
         == _sha(CAP_FREEZE),
         "p7_v5_unchanged": bindings["p7_v5_sha256"] == _sha(P7_V5),
-        "audited_sources_current": all(
-            _sha(ROOT / path) == expected
-            for path, expected in bindings["audited_source_sha256"].items()
+        "historical_sources_match_artifact_commit": manifest_matches_artifact_commit(
+            OUTPUT,
+            [
+                {"path": path, "sha256": expected}
+                for path, expected in bindings["audited_source_sha256"].items()
+            ],
         ),
         "all_outcome_authorizations_closed": all(
             str(value).startswith("NOT_AUTHORIZED")
