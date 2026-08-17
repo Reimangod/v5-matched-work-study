@@ -35,12 +35,7 @@ OPERATION_COMPONENT = {
     "rewrite-verification": "rewrite_verifications",
     "statevector-recomputation": "statevector_recomputations",
 }
-ZERO_DELTA_OPERATION_OUTCOMES = {
-    "candidate-physical-state-alias": "duplicate",
-    "cap-rejection": "cap-rejected",
-    "engineering-failure-evidence": "failed",
-}
-ZERO_DELTA_OPERATIONS = set(ZERO_DELTA_OPERATION_OUTCOMES)
+ZERO_DELTA_OPERATIONS = {"candidate-physical-state-alias", "cap-rejection"}
 OUTCOMES = {"completed", "failed", "duplicate", "cap-rejected"}
 
 
@@ -94,7 +89,11 @@ def operation_delta(
     if outcome not in OUTCOMES:
         raise ParentNativeWorkError("unregistered operation outcome")
     if operation in ZERO_DELTA_OPERATIONS:
-        expected_outcome = ZERO_DELTA_OPERATION_OUTCOMES[operation]
+        expected_outcome = (
+            "duplicate"
+            if operation == "candidate-physical-state-alias"
+            else "cap-rejected"
+        )
         if outcome != expected_outcome or units != 0 or dimension is not None:
             raise ParentNativeWorkError("evidence operation must have exact zero semantics")
         return WorkDelta()

@@ -29,7 +29,6 @@ from v5_final.s11_v2_native_preparation_runtime_v1 import (
     VerifierComponentwiseCapRejected,
 )
 from v5_final.s11_v2_queue_native_adapter import QueueV2NativeAdapter
-from v5_final.parent_native_work_accounting import operation_delta
 
 
 class _Recorder:
@@ -208,19 +207,39 @@ def test_internal_authorized_runner_is_durable_and_recovery_does_not_reexecute(
     assert paths["raw"].is_dir()
 
 
+def test_nonprimitive_failure_rolls_back_without_false_work_or_terminal(
+    tmp_path, monkeypatch
+) -> None:
+    from v5_final import s11_v2_execution_runner_v1 as subject
+
+    adapter = QueueV2NativeAdapter()
+    request = adapter.first_request_for_method("immutable-ceo-star-source")
+    monkeypatch.setattr(subject, "preflight_development_binding_v1", lambda *a, **k: None)
+    monkeypatch.setattr(
+        subject,
+        "build_queue_bound_development_runtime_v1",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("pre-context failure")),
+    )
+    with pytest.raises(S11V2ExecutionRunnerError, match="explicit additive incident"):
+        _execute_authorized_item(
+            adapter=adapter,
+            request=request,
+            production_root=tmp_path,
+            readiness_digest="6" * 64,
+        )
+    paths = _item_paths(tmp_path, _queue_index(adapter, request.item["queue_item_id"]), request)
+    records = sorted(paths["raw"].glob("*.json"))
+    assert any(path.name.endswith("attempt-rollback.json") for path in records)
+    assert not any(path.name.endswith("kernel-event.json") for path in records)
+    assert not any(path.name.endswith("terminal.json") for path in records)
+
+
 def test_runtime_environment_rejects_thread_drift(monkeypatch) -> None:
     monkeypatch.setenv("OMP_NUM_THREADS", "1")
     monkeypatch.setenv("OPENBLAS_NUM_THREADS", "2")
     monkeypatch.setenv("MKL_NUM_THREADS", "2")
     with pytest.raises(S11V2ExecutionRunnerError, match="threads_exact"):
         _runtime_environment()
-
-
-def test_engineering_failure_evidence_has_exact_zero_work_semantics() -> None:
-    delta = operation_delta(
-        "engineering-failure-evidence", units=0, dimension=None, outcome="failed"
-    )
-    assert not any(delta.__dict__.values())
 
 
 def test_source_binding_rejects_kernel_drift(monkeypatch) -> None:

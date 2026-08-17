@@ -193,11 +193,12 @@ def inspect_outcome_free() -> dict[str, Any]:
             if path.relative_to(PRODUCTION_ROOT).parts[0]
             in {"dispatch", "raw-ledgers", "results", "receipts", "verifier-ledgers"}
         ),
-        "engineering_failure_event_is_now_zero_delta_registered": (
-            "engineering-failure-evidence" in __import__(
-                "v5_final.parent_native_work_accounting", fromlist=["ZERO_DELTA_OPERATIONS"]
-            ).ZERO_DELTA_OPERATIONS
-        ),
+        "shared_accounting_protocol_remains_unchanged": _sha(
+            ROOT / "src/v5_final/parent_native_work_accounting.py"
+        )
+        == queue["execution_source_sha256"][
+            "src/v5_final/parent_native_work_accounting.py"
+        ],
         "source_bundle_present": all((ROOT / path).is_file() for path in SOURCE_PATHS),
         "storage_at_least_40_GiB": shutil.disk_usage(ROOT).free >= MINIMUM_FREE_BYTES,
     }
@@ -265,7 +266,10 @@ def capture() -> dict[str, Any]:
             "method_policy_changed": False,
             "outcome_information_used": False,
             "environment_correction": "restore exact queue-bound MB6-v2 one-thread contract",
-            "failure_event_correction": "zero-delta engineering evidence; no false rewrite work",
+            "failure_event_correction": (
+                "non-primitive failures roll back and remain unterminated pending an additive incident; "
+                "no false primitive work event is created"
+            ),
             "item000_retry": False,
         },
         "blockers": [],

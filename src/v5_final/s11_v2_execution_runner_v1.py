@@ -818,20 +818,9 @@ def _execute_authorized_item(
                 "outcome checkpoint exists; recover without repeating work"
             ) from error
         runner.persist_new_work_events(recorder.events)
-        if not any(event.outcome == "failed" for event in recorder.events):
-            recorder._append(
-                operation="engineering-failure-evidence",
-                outcome="failed",
-                units=0,
-                evidence={
-                    "phase": "s11-v2-execution-integrity",
-                    "exception_type": type(error).__name__,
-                    "exception_message": str(error),
-                    "runtime_context_exposed": context is not None,
-                    "scientific_work_delta": "ZERO",
-                },
-            )
-            runner.persist_new_work_events(recorder.events)
+        failed_primitive_exists = any(
+            event.outcome == "failed" for event in recorder.events
+        )
         if snapshots is None:
             seed = _digest(
                 {
@@ -865,6 +854,11 @@ def _execute_authorized_item(
             component_digests_after=after,
             reason=rollback_reason,
         )
+        if not failed_primitive_exists:
+            raise S11V2ExecutionRunnerError(
+                "non-primitive engineering failure was rolled back; "
+                "explicit additive incident audit is required before retry"
+            ) from error
         runner.finish("KERNEL_FAILURE", rejection_reason=type(error).__name__)
     return _recover_existing(
         request=request,
