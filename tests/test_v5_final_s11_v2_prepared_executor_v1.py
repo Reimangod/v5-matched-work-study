@@ -4,7 +4,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from v5_final.s11_v2_native_preparation_runtime_v1 import _digest
+from v5_final.parent_native_development_runtime_factory_v1 import (
+    build_queue_bound_development_runtime_v1,
+)
+from v5_final.s11_v2_native_preparation_runtime_v1 import (
+    _digest,
+    build_magnitude_verifier_v2,
+    policy_from_queue_item,
+)
 from v5_final.s11_v2_prepared_executor_v1 import (
     PreparedSessionV1,
     _CurrentRuntimeVerifierContext,
@@ -206,6 +213,28 @@ def test_magnitude_executor_uses_verified_first_deletion(
     assert executor.magnitude_deletion is deletion
     assert executor.selected_candidate_ids == (selected[0],)
     assert prepared.selected_candidate_ids == selected
+
+
+def test_actual_magnitude_candidate_ids_match_frozen_queue(
+    tmp_path,
+) -> None:
+    adapter = QueueV2NativeAdapter()
+    request = adapter.first_request_for_method("structural-magnitude-pruning")
+    context = build_queue_bound_development_runtime_v1(
+        request.execution_item_v4["queue_item_id"]
+    )
+    bundle = build_magnitude_verifier_v2(
+        context=context,
+        policy=policy_from_queue_item(request.item),
+        checkpoint_dir=tmp_path / "checkpoints",
+    )
+    actual_ids = {candidate.candidate_id for candidate in bundle.candidates}
+
+    assert actual_ids == set(request.admitted_candidate_ids)
+    result = bundle.verifier.run(bundle.candidates)
+    selected = set(result["core"]["top_k_freeze"]["selected_candidate_ids"])
+    assert selected
+    assert selected.issubset(actual_ids)
 
 
 def test_dynamic_context_binds_current_state_and_snapshot(monkeypatch) -> None:

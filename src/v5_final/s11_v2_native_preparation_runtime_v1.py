@@ -17,7 +17,10 @@ from typing import Any, Mapping, Sequence
 import numpy as np
 
 from dvg_obs_ceo.block_ir import recover_dvg_blocks
-from dvg_obs_ceo.identity import StatePreparationSpec
+from dvg_obs_ceo.identity import (
+    StatePreparationSpec,
+    canonical_json_bytes as parent_canonical_json_bytes,
+)
 from dvg_obs_ceo.molecular_identity import (
     generator_definition_digest,
     state_preparation_spec,
@@ -52,6 +55,12 @@ class VerifierComponentwiseCapRejected(S11V2NativePreparationError):
 
 def _digest(value: Any) -> str:
     return hashlib.sha256(canonical_json_bytes(value)).hexdigest()
+
+
+def _frozen_candidate_digest(value: Any) -> str:
+    """Use the scientific identity encoding already frozen by queue v2."""
+
+    return hashlib.sha256(parent_canonical_json_bytes(value)).hexdigest()
 
 
 def _float_hex(value: float) -> str:
@@ -464,7 +473,7 @@ def build_magnitude_verifier_v2(
             "constraint": "theta_i->0",
             "physical_generator_deletion": True,
         }
-        candidate_id = "magnitude-delete-v1:" + _digest(payload)
+        candidate_id = "magnitude-delete-v1:" + _frozen_candidate_digest(payload)
         iteration = next(
             index
             for index, stop in enumerate(source.cumulative_parameter_counts)
