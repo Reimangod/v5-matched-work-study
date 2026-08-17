@@ -191,7 +191,7 @@ def _audit_retry_authorization(
         or artifact.get("scientific_change") is not False
         or artifact.get("candidate_outcomes_used") is not False
         or artifact.get("authorization", {}).get("item002_retry")
-        != "AUTHORIZED_ONCE_APPEND_ONLY_SAME_ITEM_SAME_CAP"
+        != "AUTHORIZED_ONCE_APPEND_ONLY_SAME_CAP_EXPECTED_CAP_REJECTION"
         or bindings.get("item002_incident_sha256") != _sha(ITEM002_INCIDENT)
         or bindings.get("pre_retry_last_record_digest")
         != raw_last_record_digest
