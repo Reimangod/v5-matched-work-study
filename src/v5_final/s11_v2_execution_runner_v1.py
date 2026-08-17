@@ -80,6 +80,11 @@ OUTCOME_CAP_FREEZE = (
     / "artifacts/v5-final/parent-native/s11-v2-outcome-cap-freeze-v1"
     / "outcome-cap-freeze-v1.json"
 )
+ITEM000_INCIDENT = (
+    ROOT
+    / "artifacts/v5-final/parent-native/s11-v2-item000-incident-v1"
+    / "environment-contract-incident-v1.json"
+)
 ADAPTER_SOURCE = ROOT / "src/v5_final/s11_v2_queue_native_adapter.py"
 KERNEL_SOURCE_PATHS = (
     ROOT / "src/v5_final/parent_native_development_execution_v1.py",
@@ -237,6 +242,7 @@ def _validate_terminal_receipt(
     request: QueueV2NativeRequest,
     paths: Mapping[str, Path],
     readiness_digest: str,
+    predecessor_readiness_digests: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     receipt = _load(paths["receipt"])
     result = _load(paths["result"])
@@ -262,7 +268,8 @@ def _validate_terminal_receipt(
         receipt.get("queue_item_id") != request.item["queue_item_id"]
         or receipt.get("request_id") != request.work_request.request_id
         or receipt.get("result_digest") != result["result_digest"]
-        or receipt.get("execution_readiness_digest") != readiness_digest
+        or receipt.get("execution_readiness_digest")
+        not in {readiness_digest, *predecessor_readiness_digests}
         or receipt.get("N_dense_expm") != 0
         or receipt.get("FCI_evaluations") != 0
     ):
@@ -271,7 +278,11 @@ def _validate_terminal_receipt(
 
 
 def _terminal_prefix(
-    *, adapter: QueueV2NativeAdapter, production_root: Path, readiness_digest: str
+    *,
+    adapter: QueueV2NativeAdapter,
+    production_root: Path,
+    readiness_digest: str,
+    predecessor_readiness_digests: tuple[str, ...] = (),
 ) -> list[dict[str, Any]]:
     receipts: list[dict[str, Any]] = []
     gap_seen = False
@@ -291,6 +302,7 @@ def _terminal_prefix(
                     request=request,
                     paths=paths,
                     readiness_digest=readiness_digest,
+                    predecessor_readiness_digests=predecessor_readiness_digests,
                 )
             )
         else:
@@ -883,6 +895,11 @@ def _audit_readiness_v2() -> dict[str, Any]:
         or bindings.get("P7_v5", {}).get("sha256") != _sha(P7_V5)
         or bindings.get("environment", {}).get("sha256")
         != _sha(EXECUTION_ENVIRONMENT)
+        or bindings.get("item000_incident", {}).get("sha256")
+        != _sha(ITEM000_INCIDENT)
+        or artifact.get("execution_start_index") != 1
+        or artifact.get("accepted_predecessor_receipt_readiness_digests")
+        != ["5ce843ca5d057594d490243055cd657086ea8a60275c41623ff7a9e4aee6d409"]
         or not sources
         or any(_sha(ROOT / path) != expected for path, expected in sources.items())
     ):
@@ -903,6 +920,9 @@ def execute_queue_item_v1(
         adapter=adapter,
         production_root=production_root,
         readiness_digest=str(readiness["readiness_digest"]),
+        predecessor_readiness_digests=tuple(
+            readiness.get("accepted_predecessor_receipt_readiness_digests", ())
+        ),
     )
     queue_index = _queue_index(adapter, queue_item_id)
     if queue_index != len(prefix):
@@ -934,6 +954,9 @@ def execute_queue_item_v1(
         adapter=adapter,
         production_root=production_root,
         readiness_digest=str(readiness["readiness_digest"]),
+        predecessor_readiness_digests=tuple(
+            readiness.get("accepted_predecessor_receipt_readiness_digests", ())
+        ),
     )
     _write_progress(
         adapter=adapter,
