@@ -851,12 +851,24 @@ def _audit_readiness_v2() -> dict[str, Any]:
     if not READINESS_V2.is_file():
         raise S11V2ExecutionRunnerError("execution-readiness v2 GO is absent")
     artifact = _load(READINESS_V2)
+    bindings = artifact.get("binding", {})
+    sources = bindings.get("source_sha256", {})
     if (
-        artifact.get("decision") != READINESS_GO
+        artifact.get("schema") != "v5-final.s11-v2-execution-readiness.v2"
+        or artifact.get("decision") != READINESS_GO
         or not _embedded_digest(artifact, "readiness_digest")
         or not all(artifact.get("checks", {}).values())
+        or artifact.get("blockers") != []
         or artifact.get("authorization", {}).get("candidate_energy")
         != "AUTHORIZED_ONLY_INSIDE_EXACT_QUEUE_V2_ITEM_CAPS"
+        or bindings.get("queue_v2", {}).get("sha256") != _sha(QUEUE_V2)
+        or bindings.get("outcome_cap_freeze", {}).get("sha256")
+        != _sha(OUTCOME_CAP_FREEZE)
+        or bindings.get("P7_v5", {}).get("sha256") != _sha(P7_V5)
+        or bindings.get("environment", {}).get("sha256")
+        != _sha(EXECUTION_ENVIRONMENT)
+        or not sources
+        or any(_sha(ROOT / path) != expected for path, expected in sources.items())
     ):
         raise S11V2ExecutionRunnerError("execution-readiness v2 is invalid")
     return artifact
