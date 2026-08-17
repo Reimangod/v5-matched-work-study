@@ -61,10 +61,10 @@ DEFAULT_PRODUCTION_ROOT = (
 )
 READINESS_V2 = (
     ROOT
-    / "artifacts/v5-final/parent-native/s11-v2-execution-readiness-v4"
-    / "execution-readiness-go-v4.json"
+    / "artifacts/v5-final/parent-native/s11-v2-execution-readiness-v5"
+    / "execution-readiness-go-v5.json"
 )
-READINESS_GO = "GO_S11_V2_ITEM002_RETRY_AND_FROZEN_QUEUE_CONTINUATION"
+READINESS_GO = "GO_S11_V2_FROZEN_QUEUE_CONTINUATION_FROM_INDEX_5"
 P7_V5 = (
     ROOT
     / "artifacts/v5-final/parent-native/s11-v2-preexecution-gate-v5"
@@ -1003,12 +1003,12 @@ def _execute_authorized_item(
 
 def _audit_readiness_v2() -> dict[str, Any]:
     if not READINESS_V2.is_file():
-        raise S11V2ExecutionRunnerError("execution-readiness v4 GO is absent")
+        raise S11V2ExecutionRunnerError("execution-readiness v5 GO is absent")
     artifact = _load(READINESS_V2)
     bindings = artifact.get("binding", {})
     sources = bindings.get("source_sha256", {})
     if (
-        artifact.get("schema") != "v5-final.s11-v2-execution-readiness.v4"
+        artifact.get("schema") != "v5-final.s11-v2-execution-readiness.v5"
         or artifact.get("decision") != READINESS_GO
         or not _embedded_digest(artifact, "readiness_digest")
         or not all(artifact.get("checks", {}).values())
@@ -1027,12 +1027,13 @@ def _audit_readiness_v2() -> dict[str, Any]:
         != _sha(ITEM002_INCIDENT)
         or bindings.get("item002_retry_authorization", {}).get("sha256")
         != _sha(ITEM002_RETRY_AUTHORIZATION)
-        or artifact.get("execution_start_index") != 2
-        or artifact.get("retry_attempt_ordinal") != 2
+        or artifact.get("execution_start_index") != 5
+        or artifact.get("item002_retry_attempt_ordinal") != 2
         or artifact.get("accepted_predecessor_receipt_readiness_digests")
         != [
             "5ce843ca5d057594d490243055cd657086ea8a60275c41623ff7a9e4aee6d409",
             "85cce0cc03289753f146f7d2cb4cfd12789dfd9f156f6a8ca292a5daa404e355",
+            "7a624e305178993c2d4087f5ee5f4bfc459e96d1efdae2b83c7ca0d7bc277878",
         ]
         or not sources
         or any(_sha(ROOT / path) != expected for path, expected in sources.items())

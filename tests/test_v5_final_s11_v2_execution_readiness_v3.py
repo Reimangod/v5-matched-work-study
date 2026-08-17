@@ -17,7 +17,9 @@ from v5_final.s11_v2_item002_candidate_identity_incident_v1 import (
     audit_frozen as audit_item002_incident,
 )
 from v5_final.s11_v2_item002_retry_authorization_v1 import (
-    audit_frozen as audit_item002_retry,
+    OUTPUT as ITEM002_RETRY,
+    _embedded_digest as retry_digest_valid,
+    _load as load_retry,
 )
 
 
@@ -54,10 +56,16 @@ def test_historical_post_item000_readiness_is_valid_at_captured_commit() -> None
 
 def test_current_tree_preserves_v3_supersession_chain() -> None:
     incident = audit_item002_incident()
-    retry = audit_item002_retry()
+    retry = load_retry(ITEM002_RETRY)
+    retry_manifest = [
+        {"path": path, "sha256": expected}
+        for path, expected in retry["bindings"]["source_sha256"].items()
+    ]
     assert all(incident["checks"].values())
-    assert all(retry["checks"].values())
     assert incident["decision"].startswith("SUSPEND_S11_V2_READINESS_V3")
+    assert artifact_is_immutable_git_blob(ITEM002_RETRY)
+    assert retry_digest_valid(retry, "authorization_digest")
+    assert manifest_matches_commit(retry_manifest, retry["repository_head"])
     assert retry["decision"] == (
         "AUTHORIZE_S11_V2_ITEM002_SAME_ITEM_APPEND_ONLY_RETRY"
     )

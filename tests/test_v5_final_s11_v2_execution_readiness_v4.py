@@ -2,7 +2,11 @@ from pathlib import Path
 
 import pytest
 
-from v5_final.historical_artifact_audit import artifact_is_immutable_git_blob, is_ancestor
+from v5_final.historical_artifact_audit import (
+    artifact_is_immutable_git_blob,
+    is_ancestor,
+    manifest_matches_commit,
+)
 from v5_final.s11_v2_execution_readiness_v4 import (
     DECISION,
     OUTPUT,
@@ -10,7 +14,6 @@ from v5_final.s11_v2_execution_readiness_v4 import (
     _digest,
     _embedded_digest,
     _load,
-    audit_frozen,
     inspect_pre_retry,
 )
 from v5_final.s11_v2_item002_retry_authorization_v1 import (
@@ -28,10 +31,18 @@ def test_pre_retry_state_or_frozen_successor_is_valid() -> None:
         return
 
     artifact = _load(OUTPUT)
+    source_manifest = [
+        {"path": path, "sha256": expected}
+        for path, expected in artifact["binding"]["source_sha256"].items()
+    ]
     assert artifact_is_immutable_git_blob(OUTPUT)
     assert is_ancestor(artifact["captured_repository_state"]["local_head"])
+    assert manifest_matches_commit(
+        source_manifest, artifact["captured_repository_state"]["local_head"]
+    )
+    assert _embedded_digest(artifact, "readiness_digest")
     assert artifact["decision"] == DECISION
-    assert all(audit_frozen()["checks"].values())
+    assert all(artifact["checks"].values())
 
 
 def test_retry_authorization_predicts_same_cap_pre_session_rejection() -> None:
