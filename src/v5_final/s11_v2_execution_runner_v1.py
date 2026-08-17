@@ -28,6 +28,7 @@ from v5_matched_work.atomic_artifacts import canonical_json_bytes, write_json_ex
 from . import parent_native_execution_services as services
 from .parent_native_development_runtime_factory_v1 import (
     build_queue_bound_development_runtime_v1,
+    preflight_development_binding_v1,
 )
 from .parent_native_persistent_runner import (
     ParentNativePersistentRunner,
@@ -60,10 +61,10 @@ DEFAULT_PRODUCTION_ROOT = (
 )
 READINESS_V2 = (
     ROOT
-    / "artifacts/v5-final/parent-native/s11-v2-execution-readiness-v2"
-    / "execution-readiness-go-v2.json"
+    / "artifacts/v5-final/parent-native/s11-v2-execution-readiness-v3"
+    / "execution-readiness-go-v3.json"
 )
-READINESS_GO = "GO_S11_V2_EXACT_RUNNER_FROZEN_90_ITEM_EXECUTION"
+READINESS_GO = "GO_S11_V2_EXACT_RUNNER_ONE_THREAD_POST_INCIDENT_EXECUTION"
 P7_V5 = (
     ROOT
     / "artifacts/v5-final/parent-native/s11-v2-preexecution-gate-v5"
@@ -71,8 +72,8 @@ P7_V5 = (
 )
 EXECUTION_ENVIRONMENT = (
     ROOT
-    / "artifacts/v5-final/parent-native/mb6-v3"
-    / "execution-environment-v3.json"
+    / "artifacts/v5-final/mb6-v2"
+    / "execution-environment-v2.json"
 )
 OUTCOME_CAP_FREEZE = (
     ROOT
@@ -196,15 +197,24 @@ def _runtime_environment() -> dict[str, Any]:
     return record
 
 
-def _source_binding(adapter: QueueV2NativeAdapter) -> dict[str, Any]:
+def _source_binding(
+    adapter: QueueV2NativeAdapter,
+    readiness: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     queue_manifest = adapter.queue.get("execution_source_sha256", {})
     p7 = _load(P7_V5)
     p7_manifest = p7.get("artifact_bindings", {}).get("source_manifest", {})
     observed = {
         str(path.relative_to(ROOT)): _sha(path) for path in KERNEL_SOURCE_PATHS
     }
+    readiness_manifest = (
+        {} if readiness is None else readiness.get("binding", {}).get("source_sha256", {})
+    )
     expected = {
-        path: p7_manifest.get(path, queue_manifest.get(path)) for path in observed
+        path: readiness_manifest.get(
+            path, p7_manifest.get(path, queue_manifest.get(path))
+        )
+        for path in observed
     }
     if observed != expected or any(value is None for value in expected.values()):
         raise S11V2ExecutionRunnerError("actual molecular kernel source binding differs")
@@ -697,6 +707,7 @@ def _execute_authorized_item(
         raise S11V2ExecutionRunnerError("orphan result, receipt, or checkpoint exists")
 
     old_item = request.execution_item_v4
+    preflight_development_binding_v1(str(old_item["queue_item_id"]))
     random.seed(int(old_item["RNG_identity"]["python_seed"]))
     np.random.seed(int(old_item["RNG_identity"]["numpy_seed"]))
     attempt_id = make_attempt_id(
@@ -796,17 +807,19 @@ def _execute_authorized_item(
             ) from error
         runner.persist_new_work_events(recorder.events)
         if not any(event.outcome == "failed" for event in recorder.events):
-            try:
-                boundary.invoke(
-                    "rewrite-verification",
-                    lambda: (_ for _ in ()).throw(error),
-                    evidence={
-                        "phase": "s11-v2-execution-integrity",
-                        "exception_type": type(error).__name__,
-                    },
-                )
-            except BaseException:
-                pass
+            recorder._append(
+                operation="engineering-failure-evidence",
+                outcome="failed",
+                units=0,
+                evidence={
+                    "phase": "s11-v2-execution-integrity",
+                    "exception_type": type(error).__name__,
+                    "exception_message": str(error),
+                    "runtime_context_exposed": context is not None,
+                    "scientific_work_delta": "ZERO",
+                },
+            )
+            runner.persist_new_work_events(recorder.events)
         if snapshots is None:
             seed = _digest(
                 {
@@ -832,10 +845,13 @@ def _execute_authorized_item(
         if context is not None and source_snapshot is not None:
             context.runtime.restore(source_snapshot)
             after = services._component_snapshot_digest(context.runtime)
+        rollback_reason = type(error).__name__
+        if context is None:
+            rollback_reason += ":NO_RUNTIME_CONTEXT_EXPOSED"
         runner.rollback_active_attempt(
             component_digests_before=snapshots,
             component_digests_after=after,
-            reason=type(error).__name__,
+            reason=rollback_reason,
         )
         runner.finish("KERNEL_FAILURE", rejection_reason=type(error).__name__)
     return _recover_existing(
@@ -849,12 +865,12 @@ def _execute_authorized_item(
 
 def _audit_readiness_v2() -> dict[str, Any]:
     if not READINESS_V2.is_file():
-        raise S11V2ExecutionRunnerError("execution-readiness v2 GO is absent")
+        raise S11V2ExecutionRunnerError("execution-readiness v3 GO is absent")
     artifact = _load(READINESS_V2)
     bindings = artifact.get("binding", {})
     sources = bindings.get("source_sha256", {})
     if (
-        artifact.get("schema") != "v5-final.s11-v2-execution-readiness.v2"
+        artifact.get("schema") != "v5-final.s11-v2-execution-readiness.v3"
         or artifact.get("decision") != READINESS_GO
         or not _embedded_digest(artifact, "readiness_digest")
         or not all(artifact.get("checks", {}).values())
@@ -897,7 +913,7 @@ def execute_queue_item_v1(
     if paths["receipt"].exists():
         raise S11V2ExecutionRunnerError("next item already has a terminal receipt")
     environment = _runtime_environment()
-    source_binding = _source_binding(adapter)
+    source_binding = _source_binding(adapter, readiness)
     dispatch = _write_dispatch(
         adapter=adapter,
         request=request,

@@ -29,6 +29,7 @@ from v5_final.s11_v2_native_preparation_runtime_v1 import (
     VerifierComponentwiseCapRejected,
 )
 from v5_final.s11_v2_queue_native_adapter import QueueV2NativeAdapter
+from v5_final.parent_native_work_accounting import operation_delta
 
 
 class _Recorder:
@@ -61,7 +62,7 @@ def test_public_entrypoint_refuses_absent_readiness_before_adapter_or_kernel(
         raise AssertionError("adapter must remain unreachable")
 
     monkeypatch.setattr(subject, "QueueV2NativeAdapter", adapter)
-    with pytest.raises(S11V2ExecutionRunnerError, match="readiness v2 GO is absent"):
+    with pytest.raises(S11V2ExecutionRunnerError, match="readiness v3 GO is absent"):
         execute_queue_item_v1("unused", production_root=tmp_path / "production")
     assert touched["adapter"] is False
 
@@ -213,6 +214,13 @@ def test_runtime_environment_rejects_thread_drift(monkeypatch) -> None:
     monkeypatch.setenv("MKL_NUM_THREADS", "2")
     with pytest.raises(S11V2ExecutionRunnerError, match="threads_exact"):
         _runtime_environment()
+
+
+def test_engineering_failure_evidence_has_exact_zero_work_semantics() -> None:
+    delta = operation_delta(
+        "engineering-failure-evidence", units=0, dimension=None, outcome="failed"
+    )
+    assert not any(delta.__dict__.values())
 
 
 def test_source_binding_rejects_kernel_drift(monkeypatch) -> None:
