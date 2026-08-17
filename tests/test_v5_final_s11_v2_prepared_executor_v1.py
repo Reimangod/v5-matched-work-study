@@ -76,7 +76,24 @@ def test_control_methods_use_same_adapter_without_structural_verifier(
 
     adapter = QueueV2NativeAdapter()
     request = adapter.first_request_for_method(method)
-    marker = SimpleNamespace(method_id=method)
+    from v5_final.parent_native_executors import PreparedMethodNativeExecutor
+
+    marker = PreparedMethodNativeExecutor(
+        method,
+        "case",
+        "old-item",
+        object(),
+        None,
+        (),
+        (),
+        (),
+        (),
+        None,
+        0,
+        0,
+        {},
+        (),
+    )
     monkeypatch.setattr(subject, "prepare_method_executor", lambda *a, **k: marker)
     executor, prepared = prepare_initial_executor_v1(
         adapter=adapter,
@@ -84,7 +101,7 @@ def test_control_methods_use_same_adapter_without_structural_verifier(
         context=object(),
         verifier_ledger=_FakeLedger(tmp_path),
     )
-    assert executor is marker
+    assert executor.queue_item_id == request.item["queue_item_id"]
     assert prepared.selected_candidate_ids == ()
     assert prepared.preparation_status == "CONTROL_WITHOUT_STRUCTURAL_CANDIDATE"
 

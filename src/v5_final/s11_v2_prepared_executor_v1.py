@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Mapping
 
 from dvg_obs_ceo.molecular_identity import state_preparation_spec
@@ -228,7 +228,10 @@ def prepare_initial_executor_v1(
     old_item = request.execution_item_v4
     if method in CONTROL_METHODS:
         prepared_request = adapter.consume_verifier_v2(request, None)
-        executor = prepare_method_executor(context, old_item)
+        executor = replace(
+            prepare_method_executor(context, old_item),
+            queue_item_id=str(request.item["queue_item_id"]),
+        )
         return executor, prepared_request
 
     policy = policy_from_queue_item(request.item)
