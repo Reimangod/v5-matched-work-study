@@ -61,10 +61,10 @@ DEFAULT_PRODUCTION_ROOT = (
 )
 READINESS_V2 = (
     ROOT
-    / "artifacts/v5-final/parent-native/s11-v2-execution-readiness-v3"
-    / "execution-readiness-go-v3.json"
+    / "artifacts/v5-final/parent-native/s11-v2-execution-readiness-v4"
+    / "execution-readiness-go-v4.json"
 )
-READINESS_GO = "GO_S11_V2_EXACT_RUNNER_ONE_THREAD_POST_INCIDENT_EXECUTION"
+READINESS_GO = "GO_S11_V2_ITEM002_RETRY_AND_FROZEN_QUEUE_CONTINUATION"
 P7_V5 = (
     ROOT
     / "artifacts/v5-final/parent-native/s11-v2-preexecution-gate-v5"
@@ -84,6 +84,20 @@ ITEM000_INCIDENT = (
     ROOT
     / "artifacts/v5-final/parent-native/s11-v2-item000-incident-v1"
     / "environment-contract-incident-v1.json"
+)
+ITEM002_INCIDENT = (
+    ROOT
+    / "artifacts/v5-final/parent-native/s11-v2-item002-incident-v1"
+    / "candidate-identity-incident-v1.json"
+)
+ITEM002_RETRY_AUTHORIZATION = (
+    ROOT
+    / "artifacts/v5-final/parent-native/s11-v2-item002-retry-authorization-v1"
+    / "retry-authorization-v1.json"
+)
+ITEM002_QUEUE_ID = (
+    "s11-v2-item-v2:"
+    "7e30eb71e976122ee8c25d54648f3c55ab5b24f631efa666798058130a8c4ad4"
 )
 ADAPTER_SOURCE = ROOT / "src/v5_final/s11_v2_queue_native_adapter.py"
 KERNEL_SOURCE_PATHS = (
@@ -147,6 +161,45 @@ def _item_paths(root: Path, queue_index: int, request: QueueV2NativeRequest) -> 
         "dispatch": root / "dispatch" / f"{stem}.json",
         "progress": root / "progress" / f"{queue_index + 1:04d}-terminal.json",
     }
+
+
+def _retry_dispatch_path(paths: Mapping[str, Path]) -> Path:
+    return paths["dispatch"].with_name(paths["dispatch"].stem + "-retry-0002.json")
+
+
+def _audit_retry_authorization(
+    request: QueueV2NativeRequest,
+    raw_last_record_digest: str,
+) -> dict[str, Any]:
+    if request.item["queue_item_id"] != ITEM002_QUEUE_ID:
+        raise S11V2ExecutionRunnerError("retry is not authorized for this queue item")
+    if not ITEM002_RETRY_AUTHORIZATION.is_file():
+        raise S11V2ExecutionRunnerError("item002 retry authorization is absent")
+    artifact = _load(ITEM002_RETRY_AUTHORIZATION)
+    bindings = artifact.get("bindings", {})
+    sources = bindings.get("source_sha256", {})
+    if (
+        artifact.get("schema")
+        != "v5-final.s11-v2-item002-retry-authorization.v1"
+        or artifact.get("decision")
+        != "AUTHORIZE_S11_V2_ITEM002_SAME_ITEM_APPEND_ONLY_RETRY"
+        or not _embedded_digest(artifact, "authorization_digest")
+        or not all(artifact.get("checks", {}).values())
+        or artifact.get("queue_index") != 2
+        or artifact.get("queue_item_id") != ITEM002_QUEUE_ID
+        or artifact.get("retry_attempt_ordinal") != 2
+        or artifact.get("scientific_change") is not False
+        or artifact.get("candidate_outcomes_used") is not False
+        or artifact.get("authorization", {}).get("item002_retry")
+        != "AUTHORIZED_ONCE_APPEND_ONLY_SAME_ITEM_SAME_CAP"
+        or bindings.get("item002_incident_sha256") != _sha(ITEM002_INCIDENT)
+        or bindings.get("pre_retry_last_record_digest")
+        != raw_last_record_digest
+        or not sources
+        or any(_sha(ROOT / path) != expected for path, expected in sources.items())
+    ):
+        raise S11V2ExecutionRunnerError("item002 retry authorization is invalid")
+    return artifact
 
 
 def _utc_now() -> str:
@@ -321,6 +374,7 @@ def _write_dispatch(
     readiness_digest: str,
     environment: Mapping[str, Any],
     source_binding: Mapping[str, Any],
+    retry_authorization: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     fixed = {
         "schema": "v5-final.s11-v2-item-dispatch.v1",
@@ -342,6 +396,49 @@ def _write_dispatch(
     }
     if fixed["free_bytes_before_dispatch"] < MINIMUM_FREE_BYTES:
         raise S11V2ExecutionRunnerError("free storage is below 40 GiB before dispatch")
+    if retry_authorization is not None:
+        if not paths["dispatch"].is_file():
+            raise S11V2ExecutionRunnerError("retry lacks its original dispatch")
+        original = _load(paths["dispatch"])
+        if (
+            not _embedded_digest(original, "dispatch_digest")
+            or original.get("queue_item_id") != request.item["queue_item_id"]
+            or original.get("queue_index") != queue_index
+        ):
+            raise S11V2ExecutionRunnerError("original retry dispatch is invalid")
+        retry_fixed = {
+            **fixed,
+            "schema": "v5-final.s11-v2-item-retry-dispatch.v1",
+            "retry_attempt_ordinal": 2,
+            "retry_authorization_digest": retry_authorization[
+                "authorization_digest"
+            ],
+            "retry_authorization_sha256": _sha(ITEM002_RETRY_AUTHORIZATION),
+            "original_dispatch_digest": original["dispatch_digest"],
+            "original_dispatch_sha256": _sha(paths["dispatch"]),
+        }
+        retry_path = _retry_dispatch_path(paths)
+        if retry_path.exists():
+            existing = _load(retry_path)
+            if (
+                not _embedded_digest(existing, "dispatch_digest")
+                or any(existing.get(field) != value for field, value in retry_fixed.items())
+            ):
+                raise S11V2ExecutionRunnerError("existing retry dispatch differs")
+            return existing
+        retry = {
+            **retry_fixed,
+            "started_at_utc": _utc_now(),
+            "process": {
+                "pid": os.getpid(),
+                "pgid": os.getpgid(0),
+                "exact_command": [sys.executable, *sys.argv],
+                "working_directory": str(Path.cwd()),
+            },
+        }
+        retry["dispatch_digest"] = _digest(retry)
+        write_json_exclusive(retry_path, retry)
+        return retry
     if paths["dispatch"].exists():
         dispatch = _load(paths["dispatch"])
         for field, value in fixed.items():
@@ -677,6 +774,7 @@ def _execute_authorized_item(
     production_root: Path,
     readiness_digest: str,
     dispatch: Mapping[str, Any] | None = None,
+    retry_authorization: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Execute after the public gate has established authorization."""
 
@@ -686,6 +784,7 @@ def _execute_authorized_item(
         paths["verifier"], cap=request.item["verifier_componentwise_cap"]
     )
     checkpoint_path = services._outcome_checkpoint_path(paths["raw"])
+    runner = None
     if paths["raw"].exists():
         replay = replay_raw_ledger(
             paths["raw"],
@@ -704,35 +803,68 @@ def _execute_authorized_item(
                     checkpoint_path, request.work_request
                 )
                 services._terminalize_checkpoint(runner, checkpoint)
-            else:
+            elif replay.active_attempt_id is not None:
                 raise S11V2ExecutionRunnerError(
                     "active item lacks outcome checkpoint; explicit retry audit required"
                 )
-        return _recover_existing(
-            request=request,
-            paths=paths,
-            verifier_ledger=verifier_ledger,
-            readiness_digest=readiness_digest,
-            dispatch=dispatch,
-        )
-    if any(paths[key].exists() for key in ("result", "receipt")) or checkpoint_path.exists():
+            else:
+                if retry_authorization is None:
+                    raise S11V2ExecutionRunnerError(
+                        "rolled-back item lacks additive retry authorization"
+                    )
+                _audit_retry_authorization(
+                    request, str(replay.records[-1]["record_digest"])
+                )
+                preflight_development_binding_v1(
+                    str(request.execution_item_v4["queue_item_id"])
+                )
+                runner = ParentNativePersistentRunner.open(
+                    paths["raw"],
+                    request=request.work_request,
+                    cap=request.outcome_cap,
+                )
+                runner.start_retry(
+                    make_attempt_id(
+                        request.work_request,
+                        ordinal=2,
+                        nonce="s11-v2-item002-authorized-retry-attempt-2",
+                    )
+                )
+        else:
+            return _recover_existing(
+                request=request,
+                paths=paths,
+                verifier_ledger=verifier_ledger,
+                readiness_digest=readiness_digest,
+                dispatch=dispatch,
+            )
+        if checkpoint_path.is_file():
+            return _recover_existing(
+                request=request,
+                paths=paths,
+                verifier_ledger=verifier_ledger,
+                readiness_digest=readiness_digest,
+                dispatch=dispatch,
+            )
+    elif any(paths[key].exists() for key in ("result", "receipt")) or checkpoint_path.exists():
         raise S11V2ExecutionRunnerError("orphan result, receipt, or checkpoint exists")
 
     old_item = request.execution_item_v4
-    preflight_development_binding_v1(str(old_item["queue_item_id"]))
+    if runner is None:
+        preflight_development_binding_v1(str(old_item["queue_item_id"]))
+        attempt_id = make_attempt_id(
+            request.work_request,
+            ordinal=1,
+            nonce="s11-v2-frozen-production-attempt-1",
+        )
+        runner = ParentNativePersistentRunner.create(
+            paths["raw"],
+            request=request.work_request,
+            cap=request.outcome_cap,
+            attempt_id=attempt_id,
+        )
     random.seed(int(old_item["RNG_identity"]["python_seed"]))
     np.random.seed(int(old_item["RNG_identity"]["numpy_seed"]))
-    attempt_id = make_attempt_id(
-        request.work_request,
-        ordinal=1,
-        nonce="s11-v2-frozen-production-attempt-1",
-    )
-    runner = ParentNativePersistentRunner.create(
-        paths["raw"],
-        request=request.work_request,
-        cap=request.outcome_cap,
-        attempt_id=attempt_id,
-    )
     recorder = runner.resume_work_recorder()
     boundary = services.DurableWorkBoundary(runner, recorder)
     context = None
@@ -871,12 +1003,12 @@ def _execute_authorized_item(
 
 def _audit_readiness_v2() -> dict[str, Any]:
     if not READINESS_V2.is_file():
-        raise S11V2ExecutionRunnerError("execution-readiness v3 GO is absent")
+        raise S11V2ExecutionRunnerError("execution-readiness v4 GO is absent")
     artifact = _load(READINESS_V2)
     bindings = artifact.get("binding", {})
     sources = bindings.get("source_sha256", {})
     if (
-        artifact.get("schema") != "v5-final.s11-v2-execution-readiness.v3"
+        artifact.get("schema") != "v5-final.s11-v2-execution-readiness.v4"
         or artifact.get("decision") != READINESS_GO
         or not _embedded_digest(artifact, "readiness_digest")
         or not all(artifact.get("checks", {}).values())
@@ -891,9 +1023,17 @@ def _audit_readiness_v2() -> dict[str, Any]:
         != _sha(EXECUTION_ENVIRONMENT)
         or bindings.get("item000_incident", {}).get("sha256")
         != _sha(ITEM000_INCIDENT)
-        or artifact.get("execution_start_index") != 1
+        or bindings.get("item002_incident", {}).get("sha256")
+        != _sha(ITEM002_INCIDENT)
+        or bindings.get("item002_retry_authorization", {}).get("sha256")
+        != _sha(ITEM002_RETRY_AUTHORIZATION)
+        or artifact.get("execution_start_index") != 2
+        or artifact.get("retry_attempt_ordinal") != 2
         or artifact.get("accepted_predecessor_receipt_readiness_digests")
-        != ["5ce843ca5d057594d490243055cd657086ea8a60275c41623ff7a9e4aee6d409"]
+        != [
+            "5ce843ca5d057594d490243055cd657086ea8a60275c41623ff7a9e4aee6d409",
+            "85cce0cc03289753f146f7d2cb4cfd12789dfd9f156f6a8ca292a5daa404e355",
+        ]
         or not sources
         or any(_sha(ROOT / path) != expected for path, expected in sources.items())
     ):
@@ -926,6 +1066,18 @@ def execute_queue_item_v1(
     paths = _item_paths(production_root, queue_index, request)
     if paths["receipt"].exists():
         raise S11V2ExecutionRunnerError("next item already has a terminal receipt")
+    retry_authorization = None
+    if paths["raw"].exists():
+        replay = replay_raw_ledger(
+            paths["raw"],
+            request=request.work_request,
+            cap=request.outcome_cap,
+            require_terminal=False,
+        )
+        if replay.terminal is None and replay.active_attempt_id is None:
+            retry_authorization = _audit_retry_authorization(
+                request, str(replay.records[-1]["record_digest"])
+            )
     environment = _runtime_environment()
     source_binding = _source_binding(adapter, readiness)
     dispatch = _write_dispatch(
@@ -936,6 +1088,7 @@ def execute_queue_item_v1(
         readiness_digest=str(readiness["readiness_digest"]),
         environment=environment,
         source_binding=source_binding,
+        retry_authorization=retry_authorization,
     )
     result = _execute_authorized_item(
         adapter=adapter,
@@ -943,6 +1096,7 @@ def execute_queue_item_v1(
         production_root=production_root,
         readiness_digest=str(readiness["readiness_digest"]),
         dispatch=dispatch,
+        retry_authorization=retry_authorization,
     )
     receipts = _terminal_prefix(
         adapter=adapter,

@@ -10,6 +10,7 @@ import pytest
 from v5_final.parent_native_persistent_runner import (
     ParentNativePersistentRunner,
     make_attempt_id,
+    replay_raw_ledger,
 )
 from v5_final.s11_v2_execution_runner_v1 import (
     S11V2ExecutionRunnerError,
@@ -61,7 +62,7 @@ def test_public_entrypoint_refuses_absent_readiness_before_adapter_or_kernel(
         raise AssertionError("adapter must remain unreachable")
 
     monkeypatch.setattr(subject, "QueueV2NativeAdapter", adapter)
-    with pytest.raises(S11V2ExecutionRunnerError, match="readiness v3 GO is absent"):
+    with pytest.raises(S11V2ExecutionRunnerError, match="readiness v4 GO is absent"):
         execute_queue_item_v1("unused", production_root=tmp_path / "production")
     assert touched["adapter"] is False
 
@@ -232,6 +233,141 @@ def test_nonprimitive_failure_rolls_back_without_false_work_or_terminal(
     assert any(path.name.endswith("attempt-rollback.json") for path in records)
     assert not any(path.name.endswith("kernel-event.json") for path in records)
     assert not any(path.name.endswith("terminal.json") for path in records)
+
+
+def test_rolled_back_item_cannot_retry_without_additive_authorization(
+    tmp_path, monkeypatch
+) -> None:
+    from v5_final import s11_v2_execution_runner_v1 as subject
+
+    adapter = QueueV2NativeAdapter()
+    request = adapter.first_request_for_method("immutable-ceo-star-source")
+    paths = _item_paths(
+        tmp_path, _queue_index(adapter, request.item["queue_item_id"]), request
+    )
+    attempt = make_attempt_id(request.work_request, ordinal=1, nonce="failed")
+    runner = ParentNativePersistentRunner.create(
+        paths["raw"],
+        request=request.work_request,
+        cap=request.outcome_cap,
+        attempt_id=attempt,
+    )
+    snapshots = {
+        name: str(index) * 64
+        for index, name in enumerate(
+            (
+                "ansatz",
+                "parameters",
+                "optimizer_inverse_hessian",
+                "resources",
+                "ledger_transaction",
+            ),
+            start=1,
+        )
+    }
+    runner.rollback_active_attempt(
+        component_digests_before=snapshots,
+        component_digests_after=snapshots,
+        reason="TEST_ENGINEERING_FAILURE",
+    )
+    before = tuple(paths["raw"].iterdir())
+    monkeypatch.setattr(subject, "preflight_development_binding_v1", lambda *a, **k: None)
+
+    with pytest.raises(S11V2ExecutionRunnerError, match="retry authorization"):
+        _execute_authorized_item(
+            adapter=adapter,
+            request=request,
+            production_root=tmp_path,
+            readiness_digest="6" * 64,
+        )
+    assert tuple(paths["raw"].iterdir()) == before
+
+
+def test_authorized_retry_appends_attempt_without_replacing_rollback(
+    tmp_path, monkeypatch
+) -> None:
+    from v5_final import s11_v2_execution_runner_v1 as subject
+
+    adapter = QueueV2NativeAdapter()
+    request = adapter.first_request_for_method("immutable-ceo-star-source")
+    paths = _item_paths(
+        tmp_path, _queue_index(adapter, request.item["queue_item_id"]), request
+    )
+    first_attempt = make_attempt_id(request.work_request, ordinal=1, nonce="failed")
+    runner = ParentNativePersistentRunner.create(
+        paths["raw"],
+        request=request.work_request,
+        cap=request.outcome_cap,
+        attempt_id=first_attempt,
+    )
+    snapshots = {
+        name: str(index) * 64
+        for index, name in enumerate(
+            (
+                "ansatz",
+                "parameters",
+                "optimizer_inverse_hessian",
+                "resources",
+                "ledger_transaction",
+            ),
+            start=1,
+        )
+    }
+    runner.rollback_active_attempt(
+        component_digests_before=snapshots,
+        component_digests_after=snapshots,
+        reason="TEST_ENGINEERING_FAILURE",
+    )
+    runtime = _Runtime(metadata={})
+    context = SimpleNamespace(
+        runtime=runtime,
+        _actual_algorithm=SimpleNamespace(
+            molecule=SimpleNamespace(fci_energy=None, ccsd_energy=None)
+        ),
+    )
+
+    class Executor:
+        def execute(self, service):
+            return {"terminal_status": "ACCEPTED", "stopping_reason": "TEST"}
+
+    monkeypatch.setattr(subject, "ITEM002_QUEUE_ID", request.item["queue_item_id"])
+    monkeypatch.setattr(subject, "preflight_development_binding_v1", lambda *a, **k: None)
+    monkeypatch.setattr(subject, "_audit_retry_authorization", lambda *a, **k: {})
+    monkeypatch.setattr(
+        subject, "build_queue_bound_development_runtime_v1", lambda *a, **k: context
+    )
+    monkeypatch.setattr(
+        subject,
+        "prepare_initial_executor_v1",
+        lambda **kwargs: (
+            Executor(),
+            SimpleNamespace(
+                to_audit_dict=lambda: {"outcome_execution_authorized": False}
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        subject.services,
+        "_component_snapshot_digest",
+        lambda runtime: snapshots,
+    )
+    result = _execute_authorized_item(
+        adapter=adapter,
+        request=request,
+        production_root=tmp_path,
+        readiness_digest="6" * 64,
+        retry_authorization={"authorization_digest": "7" * 64},
+    )
+    replay = replay_raw_ledger(
+        paths["raw"],
+        request=request.work_request,
+        cap=request.outcome_cap,
+        require_terminal=True,
+    )
+    assert result["terminal_status"] == "COMPLETED"
+    assert replay.attempt_ids[0] == first_attempt
+    assert len(replay.attempt_ids) == 2
+    assert replay.rolled_back_attempt_ids == (first_attempt,)
 
 
 def test_runtime_environment_rejects_thread_drift(monkeypatch) -> None:
