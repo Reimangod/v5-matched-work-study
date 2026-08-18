@@ -62,7 +62,7 @@ def test_public_entrypoint_refuses_absent_readiness_before_adapter_or_kernel(
         raise AssertionError("adapter must remain unreachable")
 
     monkeypatch.setattr(subject, "QueueV2NativeAdapter", adapter)
-    with pytest.raises(S11V2ExecutionRunnerError, match="readiness v7 GO is absent"):
+    with pytest.raises(S11V2ExecutionRunnerError, match="readiness v8 GO is absent"):
         execute_queue_item_v1("unused", production_root=tmp_path / "production")
     assert touched["adapter"] is False
 
@@ -363,6 +363,83 @@ def test_item022_retry_rejects_before_runtime_or_verifier(
     assert result["raw_work_operation_units"] == {"cap-rejection": 0}
     # The immutable source-binding preflight is allowed; molecular runtime
     # construction and Verifier V2 preparation are not.
+    assert touched == {"preflight": 1, "build": 0, "prepare": 0}
+
+
+def test_item023_retry_rejects_before_runtime_or_verifier(
+    tmp_path, monkeypatch
+) -> None:
+    from v5_final import s11_v2_execution_runner_v1 as subject
+
+    adapter = QueueV2NativeAdapter()
+    request = adapter.request(subject.ITEM023_QUEUE_ID)
+    paths = _item_paths(tmp_path, 23, request)
+    runner = ParentNativePersistentRunner.create(
+        paths["raw"],
+        request=request.work_request,
+        cap=request.outcome_cap,
+        attempt_id=make_attempt_id(request.work_request, ordinal=1, nonce="incident"),
+    )
+    snapshots = {
+        name: str(index) * 64
+        for index, name in enumerate(
+            (
+                "ansatz",
+                "parameters",
+                "optimizer_inverse_hessian",
+                "resources",
+                "ledger_transaction",
+            ),
+            start=1,
+        )
+    }
+    runner.rollback_active_attempt(
+        component_digests_before=snapshots,
+        component_digests_after=snapshots,
+        reason="RelationAwareSymbolicPrecheckError",
+    )
+    authorization = {
+        "schema": "v5-final.s11-v2-item023-same-item-retry-authorization.v1",
+        "observed": {"corrected_relation_aware_upper_bound": 452},
+    }
+    monkeypatch.setattr(
+        subject, "_audit_retry_authorization", lambda *args, **kwargs: authorization
+    )
+    touched = {"preflight": 0, "build": 0, "prepare": 0}
+    monkeypatch.setattr(
+        subject,
+        "preflight_development_binding_v1",
+        lambda *args, **kwargs: touched.__setitem__(
+            "preflight", touched["preflight"] + 1
+        ),
+    )
+    monkeypatch.setattr(
+        subject,
+        "build_queue_bound_development_runtime_v1",
+        lambda *args, **kwargs: touched.__setitem__("build", touched["build"] + 1),
+    )
+    monkeypatch.setattr(
+        subject,
+        "prepare_initial_executor_v1",
+        lambda *args, **kwargs: touched.__setitem__(
+            "prepare", touched["prepare"] + 1
+        ),
+    )
+    result = _execute_authorized_item(
+        adapter=adapter,
+        request=request,
+        production_root=tmp_path,
+        readiness_digest="6" * 64,
+        retry_authorization=authorization,
+    )
+    assert result["terminal_status"] == "CAP_REJECTED"
+    assert result["candidate_energy_evaluations"] == 0
+    assert result["raw_work_total"]["optimizer_starts"] == 0
+    assert result["raw_work_total"]["statevector_recomputations"] == 0
+    assert result["verifier_work_total"]["N_symbolic_checks"] == 0
+    assert result["N_dense_expm"] == 0
+    assert result["FCI_evaluations"] == 0
+    assert result["raw_work_operation_units"] == {"cap-rejection": 0}
     assert touched == {"preflight": 1, "build": 0, "prepare": 0}
 
 
