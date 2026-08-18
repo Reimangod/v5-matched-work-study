@@ -28,7 +28,9 @@ from .s11_v2_native_preparation_runtime_v1 import (
     conservative_session_upper_bound,
     magnitude_session_upper_bound,
     policy_from_queue_item,
+    relation_aware_session_upper_bound,
 )
+from .s11_v2_relation_aware_symbolic_precheck_v1 import selected_relation_costs
 from .s11_v2_queue_native_adapter import (
     CONTROL_METHODS,
     PreparedQueueV2NativeRequest,
@@ -100,11 +102,21 @@ def _maximum_relation_terms(catalog: Any) -> int:
 
 
 def typed_session_upper_bound(
-    *, context: Any, catalog: Any, admitted_count: int, policy: Any
+    *,
+    context: Any,
+    catalog: Any,
+    admitted_count: int,
+    selected_candidate_ids: tuple[str, ...],
+    policy: Any,
 ) -> dict[str, int]:
-    return conservative_session_upper_bound(
+    costs = selected_relation_costs(
+        catalog=catalog, selected_candidate_ids=selected_candidate_ids
+    )
+    return relation_aware_session_upper_bound(
         candidate_count=admitted_count,
-        selected_count=min(policy.top_k, admitted_count),
+        selected_relation_costs=tuple(
+            record.symbolic_check_cost for record in costs
+        ),
         source_block_count=len(context.runtime.ansatz.cumulative_parameter_counts),
         maximum_relation_terms=_maximum_relation_terms(catalog),
         matrix_dimension=1 << int(context.pool.n),
@@ -126,13 +138,6 @@ def run_typed_verifier_session(
     admitted = tuple(dict.fromkeys(str(value) for value in admitted_candidate_ids))
     if not admitted:
         raise S11V2PreparedExecutorError("typed verifier candidate set is empty")
-    upper = typed_session_upper_bound(
-        context=context,
-        catalog=catalog,
-        admitted_count=len(admitted),
-        policy=policy,
-    )
-    ledger.precheck(upper)
     round_index = len(ledger.replay()) + 1
     checkpoint_dir = ledger.root / f"round-{round_index:04d}-session/checkpoints"
     verifier_context = (
@@ -145,7 +150,22 @@ def run_typed_verifier_session(
         policy=policy,
         checkpoint_dir=checkpoint_dir,
     )
+    selected_preview = bundle.preview_selected_candidate_ids()
+    upper = typed_session_upper_bound(
+        context=context,
+        catalog=catalog,
+        admitted_count=len(admitted),
+        selected_candidate_ids=selected_preview,
+        policy=policy,
+    )
+    ledger.precheck(upper)
     result = bundle.run()
+    if tuple(result["core"]["top_k_freeze"]["selected_candidate_ids"]) != (
+        selected_preview
+    ):
+        raise S11V2PreparedExecutorError(
+            "outcome-free selection preview differs from Verifier V2"
+        )
     receipt = ledger.commit(
         phase=phase,
         source_state_preparation_id=str(verifier_context.state_preparation_id),

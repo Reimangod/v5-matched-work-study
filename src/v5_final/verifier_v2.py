@@ -416,6 +416,54 @@ class VerifierV2:
         suffix = hashlib.sha256(candidate.candidate_id.encode()).hexdigest()[:16]
         return self.checkpoint_dir / f"numeric-{rank:04d}-{suffix}.json"
 
+    def preview_selected_candidate_ids(
+        self, candidates: Sequence[CandidateV2]
+    ) -> tuple[str, ...]:
+        """Reproduce top-K selection without numeric verification or checkpoints.
+
+        This preflight intentionally performs only structural validation,
+        semantic/physical deduplication, and deterministic resource ranking.
+        It never loads a generator or invokes a circuit-state factory.
+        """
+
+        ordered = tuple(sorted(candidates, key=lambda value: value.candidate_id))
+        if len({candidate.candidate_id for candidate in ordered}) != len(ordered):
+            raise VerifierV2Error("candidate IDs are duplicated")
+        semantic_representatives: dict[str, CandidateV2] = {}
+        semantic_certificates: dict[str, dict[str, Any]] = {}
+        for candidate in ordered:
+            certificate = self._structural_certificate(candidate)
+            cached = semantic_certificates.get(candidate.semantic_id)
+            if cached is not None and cached != certificate:
+                raise VerifierV2Error("semantic ID aliases incompatible certificates")
+            semantic_certificates[candidate.semantic_id] = certificate
+            semantic_representatives.setdefault(candidate.semantic_id, candidate)
+        physical_representatives: dict[str, CandidateV2] = {}
+        for candidate in semantic_representatives.values():
+            physical_representatives.setdefault(
+                candidate.proposed_state_preparation_id, candidate
+            )
+        ranked: list[tuple[tuple[Any, ...], CandidateV2]] = []
+        for candidate in physical_representatives.values():
+            recount = candidate.resource_recount()
+            if isinstance(recount, Mapping):
+                resources = tuple(int(value) for value in recount["resource_vector"])
+            else:
+                resources = tuple(int(value) for value in recount)
+            if not resources or any(value < 0 for value in resources):
+                raise VerifierV2Error("resource recount is incomplete")
+            ranked.append(
+                (
+                    (candidate.obs_predicted_loss, resources, candidate.candidate_id),
+                    candidate,
+                )
+            )
+        ranked.sort(key=lambda value: value[0])
+        return tuple(
+            candidate.candidate_id
+            for _, candidate in ranked[: min(self.policy.top_k, len(ranked))]
+        )
+
     @staticmethod
     def _read_verified_checkpoint(path: Path, candidate: CandidateV2) -> dict[str, Any]:
         record = json.loads(path.read_text())

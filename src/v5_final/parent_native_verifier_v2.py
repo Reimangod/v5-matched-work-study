@@ -96,6 +96,11 @@ class ParentVerifierV2Bundle:
     resource_cache: dict[str, tuple[Any, Any, Any]]
     source: Any
 
+    def preview_selected_candidate_ids(self) -> tuple[str, ...]:
+        """Outcome-free structural selection before numeric verifier work."""
+
+        return self.verifier.preview_selected_candidate_ids(self.candidates)
+
     def run(
         self, *, max_new_numeric_verifications: int | None = None
     ) -> dict[str, Any]:

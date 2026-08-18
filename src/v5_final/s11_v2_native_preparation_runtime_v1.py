@@ -34,6 +34,9 @@ from v5_matched_work.atomic_artifacts import canonical_json_bytes, write_json_ex
 
 from .parent_native_executors import PreparedMagnitudeDeletion
 from .parent_native_physical_identity import canonical_proposed_physical_state_id
+from .s11_v2_relation_aware_symbolic_precheck_v1 import (
+    relation_aware_symbolic_upper_bound,
+)
 from .verifier_v2 import (
     CandidateV2,
     DETERMINISTIC_COUNTER_FIELDS,
@@ -162,6 +165,41 @@ def conservative_session_upper_bound(
         "optimizer_iterations": 0,
         "energy_evaluations": 0,
     }
+
+
+def relation_aware_session_upper_bound(
+    *,
+    candidate_count: int,
+    selected_relation_costs: Sequence[int],
+    source_block_count: int,
+    maximum_relation_terms: int,
+    matrix_dimension: int,
+    qubit_count: int,
+    probe_count: int,
+) -> dict[str, int]:
+    """Use exact selected relation arities while preserving every frozen field.
+
+    The queue-v2 cap and its historical five-check formula remain unchanged.
+    This execution-time successor only makes the symbolic projection
+    conservative before numeric verification begins.
+    """
+
+    costs = tuple(selected_relation_costs)
+    selected_count = len(costs)
+    upper = conservative_session_upper_bound(
+        candidate_count=candidate_count,
+        selected_count=selected_count,
+        source_block_count=source_block_count,
+        maximum_relation_terms=maximum_relation_terms,
+        matrix_dimension=matrix_dimension,
+        qubit_count=qubit_count,
+        probe_count=probe_count,
+    )
+    upper["N_symbolic_checks"] = relation_aware_symbolic_upper_bound(
+        candidate_count=candidate_count,
+        selected_costs=costs,
+    )
+    return upper
 
 
 @dataclass(frozen=True)
