@@ -10,6 +10,10 @@ from typing import Any
 
 from v5_matched_work.atomic_artifacts import canonical_json_bytes, write_json_exclusive
 
+from .historical_artifact_audit import (
+    artifact_is_immutable_git_blob,
+    manifest_matches_artifact_commit,
+)
 from .s0_successor import ROOT
 from .s11_v2_queue_native_adapter import (
     EXPECTED_QUEUE_DIGEST,
@@ -141,13 +145,47 @@ def build() -> dict[str, Any]:
 def audit() -> dict[str, Any]:
     if not OUTPUT.is_file():
         raise AdapterReadinessError("adapter readiness artifact is absent")
-    artifact = json.loads(OUTPUT.read_text(encoding="utf-8"))
-    rebuilt = build()
-    if artifact != rebuilt or OUTPUT.read_bytes() != canonical_json_bytes(artifact):
-        raise AdapterReadinessError("adapter readiness artifact differs")
+    raw = OUTPUT.read_bytes()
+    artifact = json.loads(raw)
+    body = dict(artifact)
+    readiness_digest = body.pop("readiness_digest", None)
+    binding = dict(artifact["binding"])
+    adapter_digest = binding.pop("adapter_digest", None)
+    source_manifest = [
+        {"path": path, "sha256": expected}
+        for path, expected in artifact["binding"]["source_sha256"].items()
+        if not path.startswith("provenance/")
+    ]
+    pinned_sources = {
+        path: expected
+        for path, expected in artifact["binding"]["source_sha256"].items()
+        if path.startswith("provenance/")
+    }
+    checks = {
+        "canonical_immutable_artifact": raw == canonical_json_bytes(artifact)
+        and artifact_is_immutable_git_blob(OUTPUT),
+        "readiness_digest_valid": readiness_digest == _digest(body),
+        "adapter_digest_valid": adapter_digest == _digest(binding),
+        "historical_source_manifest_valid": manifest_matches_artifact_commit(
+            OUTPUT, source_manifest
+        )
+        and all(_sha(ROOT / path) == expected for path, expected in pinned_sources.items()),
+        "queue_v2_still_exact": artifact["binding"]["queue_v2"]["sha256"]
+        == _sha(QUEUE_V2)
+        and artifact["binding"]["queue_v2"]["queue_digest"]
+        == EXPECTED_QUEUE_DIGEST,
+        "outcomes_zero": artifact["candidate_energy_evaluations"]
+        == artifact["optimizer_iterations"]
+        == artifact["FCI_evaluations"]
+        == 0,
+    }
+    if not all(checks.values()):
+        raise AdapterReadinessError(
+            [name for name, passed in checks.items() if not passed]
+        )
     return {
         "status": "PASS_ADAPTER_READINESS_ARTIFACT",
-        "checks": artifact["checks"],
+        "checks": artifact["checks"] | checks,
         "adapter_digest": artifact["binding"]["adapter_digest"],
         "readiness_digest": artifact["readiness_digest"],
     }

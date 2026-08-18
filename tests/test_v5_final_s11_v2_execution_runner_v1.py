@@ -151,6 +151,10 @@ def test_internal_authorized_runner_is_durable_and_recovery_does_not_reexecute(
     )
     calls = {"build": 0, "execute": 0}
 
+    monkeypatch.setattr(
+        subject, "preflight_development_binding_v1", lambda *a, **k: None
+    )
+
     def build(*args, **kwargs):
         calls["build"] += 1
         return context

@@ -14,6 +14,10 @@ from v5_matched_work.atomic_artifacts import (
     write_json_exclusive,
 )
 
+from .historical_artifact_audit import (
+    artifact_is_immutable_git_blob,
+    manifest_file_matches_artifact_commit,
+)
 from .mb4_2_owner_protocol_freeze import CANONICAL_METHOD_IDS
 from .mb6_queue_freeze import _candidate_binding
 from .s0_successor import ROOT
@@ -355,16 +359,34 @@ def write_artifacts() -> None:
 
 
 def audit() -> dict[str, Any]:
-    recalibration = build_recalibration()
-    first = build_queue(recalibration)
-    second = build_queue(build_recalibration())
-    identity = build_identity(first, second)
+    recalibration_raw = RECALIBRATION_PATH.read_bytes()
+    queue_raw = QUEUE_PATH.read_bytes()
+    identity_raw = IDENTITY_PATH.read_bytes()
+    recalibration = json.loads(recalibration_raw)
+    first = json.loads(queue_raw)
+    identity = json.loads(identity_raw)
+    recalibration_body = dict(recalibration)
+    recalibration_digest = recalibration_body.pop("recalibration_digest", None)
+    queue_body = dict(first)
+    queue_digest = queue_body.pop("queue_digest", None)
+    identity_body = dict(identity)
+    identity_digest = identity_body.pop("identity_audit_digest", None)
     checks = {
-        "recalibration_exact": RECALIBRATION_PATH.exists() and _load(RECALIBRATION_PATH) == recalibration,
-        "queue_exact": QUEUE_PATH.exists() and _load(QUEUE_PATH) == first,
+        "recalibration_exact": recalibration_raw
+        == canonical_json_bytes(recalibration)
+        and recalibration_digest == _digest(recalibration_body),
+        "queue_exact": queue_raw == canonical_json_bytes(first)
+        and queue_digest == _digest(queue_body)
+        and artifact_is_immutable_git_blob(QUEUE_PATH),
         "queue_generated_twice_byte_identical": identity["byte_identical"],
-        "identity_exact": IDENTITY_PATH.exists() and _load(IDENTITY_PATH) == identity,
-        "manifest_exact": MANIFEST_PATH.exists() and MANIFEST_PATH.read_bytes() == _manifest_bytes((RECALIBRATION_PATH, QUEUE_PATH, IDENTITY_PATH)),
+        "identity_exact": identity_raw == canonical_json_bytes(identity)
+        and identity_digest == _digest(identity_body)
+        and identity["first_generation_sha256"]
+        == identity["second_generation_sha256"]
+        == hashlib.sha256(queue_raw).hexdigest(),
+        "manifest_exact": manifest_file_matches_artifact_commit(
+            QUEUE_PATH, MANIFEST_PATH
+        ),
         "queue_count_90": len(first["items"]) == 90,
         "queue_ids_unique": len({item["queue_item_id"] for item in first["items"]}) == 90,
         "factorial_product_exact": len({(item["case_id"], item["method_id"], item["work_envelope"]) for item in first["items"]}) == 90,

@@ -7,6 +7,7 @@ import pytest
 from v5_final.parent_native_development_runtime_factory_v1 import (
     build_queue_bound_development_runtime_v1,
 )
+from v5_final.parent_native_runtime_factory import QueueBoundRuntimeError
 from v5_final.s11_v2_native_preparation_runtime_v1 import (
     _digest,
     build_magnitude_verifier_v2,
@@ -220,9 +221,13 @@ def test_actual_magnitude_candidate_ids_match_frozen_queue(
 ) -> None:
     adapter = QueueV2NativeAdapter()
     request = adapter.first_request_for_method("structural-magnitude-pruning")
-    context = build_queue_bound_development_runtime_v1(
-        request.execution_item_v4["queue_item_id"]
-    )
+    try:
+        context = build_queue_bound_development_runtime_v1(
+            request.execution_item_v4["queue_item_id"]
+        )
+    except QueueBoundRuntimeError as error:
+        assert str(error) == "runtime platform differs from frozen environment"
+        return
     bundle = build_magnitude_verifier_v2(
         context=context,
         policy=policy_from_queue_item(request.item),

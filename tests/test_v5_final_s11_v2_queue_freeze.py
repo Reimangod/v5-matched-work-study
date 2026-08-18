@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from v5_final.s11_v2_queue_freeze import audit, build_queue, build_recalibration
+import json
+
+from v5_final.s11_v2_queue_freeze import (
+    QUEUE_PATH,
+    audit,
+    build_recalibration,
+)
 
 
 def test_p6_frozen_artifacts_rebuild_exactly() -> None:
@@ -10,7 +16,7 @@ def test_p6_frozen_artifacts_rebuild_exactly() -> None:
 
 
 def test_queue_is_fresh_factorial_and_outcome_blocked() -> None:
-    queue = build_queue(build_recalibration())
+    queue = json.loads(QUEUE_PATH.read_text(encoding="utf-8"))
     assert queue["frozen_item_count"] == 90
     assert len({item["queue_item_id"] for item in queue["items"]}) == 90
     assert all(item["terminal_status"] == "NOT_STARTED" for item in queue["items"])

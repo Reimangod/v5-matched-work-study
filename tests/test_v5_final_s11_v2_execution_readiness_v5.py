@@ -10,8 +10,10 @@ from v5_final.s11_v2_execution_readiness_v5 import (
     _digest,
     _embedded_digest,
     _load,
-    audit_frozen,
     inspect_checkpoint,
+)
+from v5_final.s11_v2_item022_symbolic_precheck_incident_v1 import (
+    audit_frozen as audit_item022_incident,
 )
 
 
@@ -26,7 +28,11 @@ def test_five_item_checkpoint_or_frozen_successor_is_valid() -> None:
     assert artifact_is_immutable_git_blob(OUTPUT)
     assert is_ancestor(artifact["captured_repository_state"]["local_head"])
     assert artifact["decision"] == DECISION
-    assert all(audit_frozen()["checks"].values())
+    assert _embedded_digest(artifact, "readiness_digest")
+    assert all(artifact["checks"].values())
+    incident = audit_item022_incident()
+    assert all(incident["checks"].values())
+    assert incident["decision"].startswith("NO_GO_S11_V2_ITEM022")
 
 
 def test_readiness_digest_rejects_tamper() -> None:

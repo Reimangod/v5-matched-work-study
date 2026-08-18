@@ -19,6 +19,11 @@ from scipy.sparse.linalg import expm_multiply
 
 from v5_matched_work.atomic_artifacts import canonical_json_bytes, write_json_exclusive
 
+from .historical_artifact_audit import (
+    artifact_is_immutable_git_blob,
+    manifest_file_matches_artifact_commit,
+)
+
 from .parent_native_candidate_adapter import (
     build_typed_catalog,
     compose_parent_native_plan,
@@ -493,21 +498,22 @@ def write_calibration() -> dict[str, Any]:
 
 
 def audit() -> dict[str, bool]:
-    summary = json.loads(SUMMARY_PATH.read_text())
+    summary_raw = SUMMARY_PATH.read_bytes()
+    summary = json.loads(summary_raw)
     body = dict(summary)
     observed = body.pop("summary_digest", None)
     cores = {key: json.loads(path.read_text()) for key, path in CORE_PATHS.items()}
-    expected_lines = [
-        f"{_sha(path)}  {path.relative_to(ROOT)}"
-        for path in (*CODE_PATHS, *CORE_PATHS.values(), SUMMARY_PATH)
-    ]
     checks = {
-        "summary_digest_valid": observed == _digest(body),
+        "summary_digest_valid": observed == _digest(body)
+        and summary_raw == canonical_json_bytes(summary)
+        and artifact_is_immutable_git_blob(SUMMARY_PATH),
         "case_sha256_valid": summary["case_core_sha256"]
         == {key: _sha(path) for key, path in CORE_PATHS.items()},
         "case_core_digests_valid": summary["case_core_digests"]
         == {key: value["core_digest"] for key, value in cores.items()},
-        "manifest_exact": MANIFEST_PATH.read_text().splitlines() == expected_lines,
+        "manifest_exact": manifest_file_matches_artifact_commit(
+            SUMMARY_PATH, MANIFEST_PATH
+        ),
         "all_calibration_checks_pass": all(summary["checks"].values()),
         "production_dense_expm_zero": summary["production_dense_expm"] == 0,
         "candidate_outcomes_blocked": all(

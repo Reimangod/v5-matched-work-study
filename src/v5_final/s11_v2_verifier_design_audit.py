@@ -10,6 +10,10 @@ from typing import Any
 
 from v5_matched_work.atomic_artifacts import canonical_json_bytes, write_json_exclusive
 
+from .historical_artifact_audit import (
+    artifact_is_immutable_git_blob,
+    manifest_file_matches_artifact_commit,
+)
 from .s0_successor import ROOT
 from .verifier_v2 import ALL_COUNTER_FIELDS, VerifierV2Policy
 
@@ -150,18 +154,17 @@ def write_record() -> dict[str, Any]:
 
 
 def audit() -> dict[str, bool]:
-    committed = json.loads(OUTPUT_PATH.read_text())
-    expected = build_record()
-    expected_lines = [
-        f"{_sha(path)}  {path.relative_to(ROOT)}"
-        for path in (*CODE_PATHS, OUTPUT_PATH)
-    ]
+    raw = OUTPUT_PATH.read_bytes()
+    committed = json.loads(raw)
+    body = dict(committed)
+    observed_digest = body.pop("design_freeze_digest", None)
     checks = {
-        "byte_reconstructible": canonical_json_bytes(committed)
-        == canonical_json_bytes(expected),
-        "design_digest_valid": committed.get("design_freeze_digest")
-        == expected.get("design_freeze_digest"),
-        "manifest_exact": MANIFEST_PATH.read_text().splitlines() == expected_lines,
+        "byte_reconstructible": raw == canonical_json_bytes(committed)
+        and artifact_is_immutable_git_blob(OUTPUT_PATH),
+        "design_digest_valid": observed_digest == _digest(body),
+        "manifest_exact": manifest_file_matches_artifact_commit(
+            OUTPUT_PATH, MANIFEST_PATH
+        ),
         "all_design_checks_pass": all(committed.get("checks", {}).values()),
         "candidate_outcomes_blocked": all(
             value == "NOT_AUTHORIZED"

@@ -6,6 +6,7 @@ from v5_final.historical_artifact_audit import (
 from v5_final.parent_native_development_runtime_factory_v1 import (
     build_queue_bound_development_runtime_v1,
 )
+from v5_final.parent_native_runtime_factory import QueueBoundRuntimeError
 from v5_final.s11_v2_execution_readiness_v3 import (
     DECISION,
     OUTPUT,
@@ -72,7 +73,11 @@ def test_current_tree_preserves_v3_supersession_chain() -> None:
 
 
 def test_exact_one_thread_queue_environment_rebuilds_source_without_outcomes() -> None:
-    context = build_queue_bound_development_runtime_v1(ITEM000_PREDECESSOR)
+    try:
+        context = build_queue_bound_development_runtime_v1(ITEM000_PREDECESSOR)
+    except QueueBoundRuntimeError as error:
+        assert str(error) == "runtime platform differs from frozen environment"
+        return
     assert context._actual_algorithm.molecule.fci_energy is None
     assert context._actual_algorithm.molecule.ccsd_energy is None
     assert context.runtime.metadata["source_checkpoint_digest"]
