@@ -61,14 +61,19 @@ DEFAULT_PRODUCTION_ROOT = (
 )
 READINESS_V2 = (
     ROOT
+    / "artifacts/v5-final/parent-native/s11-v2-execution-readiness-v7"
+    / "execution-readiness-go-v7.json"
+)
+READINESS_GO = "GO_S11_V2_FROZEN_QUEUE_CONTINUATION_FROM_INDEX_23"
+READINESS_V6 = (
+    ROOT
     / "artifacts/v5-final/parent-native/s11-v2-execution-readiness-v6"
     / "execution-readiness-go-v6.json"
 )
-READINESS_GO = "GO_S11_V2_ITEM022_SAME_ITEM_PREVERIFIER_CAP_RETRY"
-READINESS_V5 = (
+ITEM022_TERMINAL_RECONCILIATION = (
     ROOT
-    / "artifacts/v5-final/parent-native/s11-v2-execution-readiness-v5"
-    / "execution-readiness-go-v5.json"
+    / "artifacts/v5-final/parent-native/s11-v2-item022-terminal-reconciliation-v1"
+    / "terminal-reconciliation-v1.json"
 )
 P7_V5 = (
     ROOT
@@ -1099,37 +1104,38 @@ def _execute_authorized_item(
 
 def _audit_readiness_v2() -> dict[str, Any]:
     if not READINESS_V2.is_file():
-        raise S11V2ExecutionRunnerError("execution-readiness v6 GO is absent")
+        raise S11V2ExecutionRunnerError("execution-readiness v7 GO is absent")
     artifact = _load(READINESS_V2)
-    readiness_v5 = _load(READINESS_V5)
+    readiness_v6 = _load(READINESS_V6)
     bindings = artifact.get("binding", {})
     sources = bindings.get("source_sha256", {})
     if (
-        artifact.get("schema") != "v5-final.s11-v2-execution-readiness.v6"
+        artifact.get("schema") != "v5-final.s11-v2-execution-readiness.v7"
         or artifact.get("decision") != READINESS_GO
         or not _embedded_digest(artifact, "readiness_digest")
         or not all(artifact.get("checks", {}).values())
         or artifact.get("blockers") != []
-        or artifact.get("authorization", {}).get("item022_retry")
-        != "AUTHORIZED_ONCE_PREVERIFIER_CAP_REJECTION_ONLY"
+        or artifact.get("authorization", {}).get("S11_v2_execution")
+        != "AUTHORIZED_EXACT_FROZEN_QUEUE_FROM_INDEX_23_ONLY"
+        or artifact.get("authorization", {}).get("FCI_reporting")
+        != "NOT_AUTHORIZED_UNTIL_ALL_90_TERMINAL"
+        or artifact.get("authorization", {}).get("performance_claim")
+        != "NOT_AUTHORIZED"
         or bindings.get("queue_v2", {}).get("sha256") != _sha(QUEUE_V2)
         or bindings.get("outcome_cap_freeze", {}).get("sha256")
         != _sha(OUTCOME_CAP_FREEZE)
         or bindings.get("P7_v5", {}).get("sha256") != _sha(P7_V5)
         or bindings.get("environment", {}).get("sha256")
         != _sha(EXECUTION_ENVIRONMENT)
-        or bindings.get("readiness_v5", {}).get("sha256") != _sha(READINESS_V5)
-        or bindings.get("readiness_v5", {}).get("readiness_digest")
-        != readiness_v5["readiness_digest"]
-        or bindings.get("item022_incident", {}).get("sha256")
-        != _sha(ITEM022_INCIDENT)
-        or bindings.get("item022_retry_authorization", {}).get("sha256")
-        != _sha(ITEM022_RETRY_AUTHORIZATION)
-        or artifact.get("execution_start_index") != 22
-        or artifact.get("item022_retry_attempt_ordinal") != 2
+        or bindings.get("readiness_v6", {}).get("sha256") != _sha(READINESS_V6)
+        or bindings.get("readiness_v6", {}).get("readiness_digest")
+        != readiness_v6["readiness_digest"]
+        or bindings.get("item022_terminal_reconciliation", {}).get("sha256")
+        != _sha(ITEM022_TERMINAL_RECONCILIATION)
+        or artifact.get("execution_start_index") != 23
         or artifact.get("accepted_predecessor_receipt_readiness_digests")
-        != readiness_v5.get("accepted_predecessor_receipt_readiness_digests", [])
-        + [readiness_v5["readiness_digest"]]
+        != readiness_v6.get("accepted_predecessor_receipt_readiness_digests", [])
+        + [readiness_v6["readiness_digest"]]
         or not artifact.get("tests", {}).get("full_repository_suite", {}).get("passed")
         or not artifact.get("tests", {})
         .get("live_repository_checks", {})
@@ -1143,7 +1149,7 @@ def _audit_readiness_v2() -> dict[str, Any]:
         or not sources
         or any(_sha(ROOT / path) != expected for path, expected in sources.items())
     ):
-        raise S11V2ExecutionRunnerError("execution-readiness v6 is invalid")
+        raise S11V2ExecutionRunnerError("execution-readiness v7 is invalid")
     return artifact
 
 
