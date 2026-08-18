@@ -61,10 +61,15 @@ DEFAULT_PRODUCTION_ROOT = (
 )
 READINESS_V2 = (
     ROOT
+    / "artifacts/v5-final/parent-native/s11-v2-execution-readiness-v6"
+    / "execution-readiness-go-v6.json"
+)
+READINESS_GO = "GO_S11_V2_ITEM022_SAME_ITEM_PREVERIFIER_CAP_RETRY"
+READINESS_V5 = (
+    ROOT
     / "artifacts/v5-final/parent-native/s11-v2-execution-readiness-v5"
     / "execution-readiness-go-v5.json"
 )
-READINESS_GO = "GO_S11_V2_FROZEN_QUEUE_CONTINUATION_FROM_INDEX_5"
 P7_V5 = (
     ROOT
     / "artifacts/v5-final/parent-native/s11-v2-preexecution-gate-v5"
@@ -98,6 +103,20 @@ ITEM002_RETRY_AUTHORIZATION = (
 ITEM002_QUEUE_ID = (
     "s11-v2-item-v2:"
     "7e30eb71e976122ee8c25d54648f3c55ab5b24f631efa666798058130a8c4ad4"
+)
+ITEM022_INCIDENT = (
+    ROOT
+    / "artifacts/v5-final/parent-native/s11-v2-item022-incident-v1"
+    / "symbolic-precheck-incident-v1.json"
+)
+ITEM022_RETRY_AUTHORIZATION = (
+    ROOT
+    / "artifacts/v5-final/parent-native/s11-v2-item022-retry-authorization-v1"
+    / "same-item-retry-authorization-v1.json"
+)
+ITEM022_QUEUE_ID = (
+    "s11-v2-item-v2:"
+    "b9e587bb7f9b2fc9240ff5e7a51b98a34f9665ab47208968e6259e3277e319c3"
 )
 ADAPTER_SOURCE = ROOT / "src/v5_final/s11_v2_queue_native_adapter.py"
 KERNEL_SOURCE_PATHS = (
@@ -171,13 +190,49 @@ def _audit_retry_authorization(
     request: QueueV2NativeRequest,
     raw_last_record_digest: str,
 ) -> dict[str, Any]:
-    if request.item["queue_item_id"] != ITEM002_QUEUE_ID:
+    queue_item_id = request.item["queue_item_id"]
+    if queue_item_id == ITEM002_QUEUE_ID:
+        authorization_path = ITEM002_RETRY_AUTHORIZATION
+    elif queue_item_id == ITEM022_QUEUE_ID:
+        authorization_path = ITEM022_RETRY_AUTHORIZATION
+    else:
         raise S11V2ExecutionRunnerError("retry is not authorized for this queue item")
-    if not ITEM002_RETRY_AUTHORIZATION.is_file():
-        raise S11V2ExecutionRunnerError("item002 retry authorization is absent")
-    artifact = _load(ITEM002_RETRY_AUTHORIZATION)
+    if not authorization_path.is_file():
+        raise S11V2ExecutionRunnerError("same-item retry authorization is absent")
+    artifact = _load(authorization_path)
     bindings = artifact.get("bindings", {})
     sources = bindings.get("source_sha256", {})
+    if queue_item_id == ITEM022_QUEUE_ID:
+        observed = artifact.get("observed", {})
+        if (
+            artifact.get("schema")
+            != "v5-final.s11-v2-item022-same-item-retry-authorization.v1"
+            or artifact.get("decision")
+            != "AUTHORIZE_S11_V2_ITEM022_SAME_ITEM_PREVERIFIER_CAP_RETRY"
+            or not _embedded_digest(artifact, "authorization_digest")
+            or not all(artifact.get("checks", {}).values())
+            or artifact.get("queue_index") != 22
+            or artifact.get("queue_item_id") != ITEM022_QUEUE_ID
+            or artifact.get("retry_attempt_ordinal") != 2
+            or artifact.get("scientific_change") is not False
+            or artifact.get("candidate_outcomes_used") is not False
+            or artifact.get("authorization", {}).get("item022_retry")
+            != "AUTHORIZED_ONCE_APPEND_ONLY_SAME_CAP_PREVERIFIER_REJECTION"
+            or bindings.get("item022_incident_sha256") != _sha(ITEM022_INCIDENT)
+            or bindings.get("pre_retry_last_record_digest") != raw_last_record_digest
+            or bindings.get("outcome_cap_digest")
+            != request.item["outcome_work_cap"]["cap_digest"]
+            or bindings.get("verifier_cap_digest")
+            != request.item["verifier_componentwise_cap_digest"]
+            or observed.get("corrected_relation_aware_upper_bound", 0)
+            <= request.item["verifier_componentwise_cap"]["N_symbolic_checks"]
+            or observed.get("expected_terminal")
+            != "CAP_REJECTED_BEFORE_VERIFIER_OR_RUNTIME"
+            or not sources
+            or any(_sha(ROOT / path) != expected for path, expected in sources.items())
+        ):
+            raise S11V2ExecutionRunnerError("item022 retry authorization is invalid")
+        return artifact
     if (
         artifact.get("schema")
         != "v5-final.s11-v2-item002-retry-authorization.v1"
@@ -200,6 +255,15 @@ def _audit_retry_authorization(
     ):
         raise S11V2ExecutionRunnerError("item002 retry authorization is invalid")
     return artifact
+
+
+def _retry_authorization_path(artifact: Mapping[str, Any]) -> Path:
+    schema = artifact.get("schema")
+    if schema == "v5-final.s11-v2-item002-retry-authorization.v1":
+        return ITEM002_RETRY_AUTHORIZATION
+    if schema == "v5-final.s11-v2-item022-same-item-retry-authorization.v1":
+        return ITEM022_RETRY_AUTHORIZATION
+    raise S11V2ExecutionRunnerError("retry authorization schema is unknown")
 
 
 def _utc_now() -> str:
@@ -413,7 +477,9 @@ def _write_dispatch(
             "retry_authorization_digest": retry_authorization[
                 "authorization_digest"
             ],
-            "retry_authorization_sha256": _sha(ITEM002_RETRY_AUTHORIZATION),
+            "retry_authorization_sha256": _sha(
+                _retry_authorization_path(retry_authorization)
+            ),
             "original_dispatch_digest": original["dispatch_digest"],
             "original_dispatch_sha256": _sha(paths["dispatch"]),
         }
@@ -827,9 +893,39 @@ def _execute_authorized_item(
                     make_attempt_id(
                         request.work_request,
                         ordinal=2,
-                        nonce="s11-v2-item002-authorized-retry-attempt-2",
+                        nonce=(
+                            "s11-v2-item022-authorized-preverifier-retry-attempt-2"
+                            if request.item["queue_item_id"] == ITEM022_QUEUE_ID
+                            else "s11-v2-item002-authorized-retry-attempt-2"
+                        ),
                     )
                 )
+                if request.item["queue_item_id"] == ITEM022_QUEUE_ID:
+                    corrected = int(
+                        retry_authorization["observed"][
+                            "corrected_relation_aware_upper_bound"
+                        ]
+                    )
+                    frozen_cap = int(
+                        request.item["verifier_componentwise_cap"][
+                            "N_symbolic_checks"
+                        ]
+                    )
+                    recorder = runner.resume_work_recorder()
+                    boundary = services.DurableWorkBoundary(runner, recorder)
+                    reason = (
+                        "relation-aware symbolic precheck rejected before runtime: "
+                        f"N_symbolic_checks projected={corrected} cap={frozen_cap}"
+                    )
+                    _record_verifier_cap_rejection(boundary, reason)
+                    runner.finish("CAP_REJECTED", rejection_reason=reason)
+                    return _recover_existing(
+                        request=request,
+                        paths=paths,
+                        verifier_ledger=verifier_ledger,
+                        readiness_digest=readiness_digest,
+                        dispatch=dispatch,
+                    )
         else:
             return _recover_existing(
                 request=request,
@@ -1003,42 +1099,51 @@ def _execute_authorized_item(
 
 def _audit_readiness_v2() -> dict[str, Any]:
     if not READINESS_V2.is_file():
-        raise S11V2ExecutionRunnerError("execution-readiness v5 GO is absent")
+        raise S11V2ExecutionRunnerError("execution-readiness v6 GO is absent")
     artifact = _load(READINESS_V2)
+    readiness_v5 = _load(READINESS_V5)
     bindings = artifact.get("binding", {})
     sources = bindings.get("source_sha256", {})
     if (
-        artifact.get("schema") != "v5-final.s11-v2-execution-readiness.v5"
+        artifact.get("schema") != "v5-final.s11-v2-execution-readiness.v6"
         or artifact.get("decision") != READINESS_GO
         or not _embedded_digest(artifact, "readiness_digest")
         or not all(artifact.get("checks", {}).values())
         or artifact.get("blockers") != []
-        or artifact.get("authorization", {}).get("candidate_energy")
-        != "AUTHORIZED_ONLY_INSIDE_EXACT_QUEUE_V2_ITEM_CAPS"
+        or artifact.get("authorization", {}).get("item022_retry")
+        != "AUTHORIZED_ONCE_PREVERIFIER_CAP_REJECTION_ONLY"
         or bindings.get("queue_v2", {}).get("sha256") != _sha(QUEUE_V2)
         or bindings.get("outcome_cap_freeze", {}).get("sha256")
         != _sha(OUTCOME_CAP_FREEZE)
         or bindings.get("P7_v5", {}).get("sha256") != _sha(P7_V5)
         or bindings.get("environment", {}).get("sha256")
         != _sha(EXECUTION_ENVIRONMENT)
-        or bindings.get("item000_incident", {}).get("sha256")
-        != _sha(ITEM000_INCIDENT)
-        or bindings.get("item002_incident", {}).get("sha256")
-        != _sha(ITEM002_INCIDENT)
-        or bindings.get("item002_retry_authorization", {}).get("sha256")
-        != _sha(ITEM002_RETRY_AUTHORIZATION)
-        or artifact.get("execution_start_index") != 5
-        or artifact.get("item002_retry_attempt_ordinal") != 2
+        or bindings.get("readiness_v5", {}).get("sha256") != _sha(READINESS_V5)
+        or bindings.get("readiness_v5", {}).get("readiness_digest")
+        != readiness_v5["readiness_digest"]
+        or bindings.get("item022_incident", {}).get("sha256")
+        != _sha(ITEM022_INCIDENT)
+        or bindings.get("item022_retry_authorization", {}).get("sha256")
+        != _sha(ITEM022_RETRY_AUTHORIZATION)
+        or artifact.get("execution_start_index") != 22
+        or artifact.get("item022_retry_attempt_ordinal") != 2
         or artifact.get("accepted_predecessor_receipt_readiness_digests")
-        != [
-            "5ce843ca5d057594d490243055cd657086ea8a60275c41623ff7a9e4aee6d409",
-            "85cce0cc03289753f146f7d2cb4cfd12789dfd9f156f6a8ca292a5daa404e355",
-            "7a624e305178993c2d4087f5ee5f4bfc459e96d1efdae2b83c7ca0d7bc277878",
-        ]
+        != readiness_v5.get("accepted_predecessor_receipt_readiness_digests", [])
+        + [readiness_v5["readiness_digest"]]
+        or not artifact.get("tests", {}).get("full_repository_suite", {}).get("passed")
+        or not artifact.get("tests", {})
+        .get("live_repository_checks", {})
+        .get("checks", [])
+        or not all(
+            item.get("status") == "COMPLETED" and item.get("conclusion") == "SUCCESS"
+            for item in artifact.get("tests", {})
+            .get("live_repository_checks", {})
+            .get("checks", [])
+        )
         or not sources
         or any(_sha(ROOT / path) != expected for path, expected in sources.items())
     ):
-        raise S11V2ExecutionRunnerError("execution-readiness v2 is invalid")
+        raise S11V2ExecutionRunnerError("execution-readiness v6 is invalid")
     return artifact
 
 
