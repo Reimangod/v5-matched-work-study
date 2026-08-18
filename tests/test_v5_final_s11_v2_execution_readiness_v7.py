@@ -3,6 +3,13 @@ from types import SimpleNamespace
 
 import pytest
 
+from v5_final.s11_v2_item022_terminal_reconciliation_v1 import (
+    historical_artifact_valid,
+)
+from v5_final.s11_v2_item023_relation_metadata_incident_v1 import (
+    OUTPUT as ITEM023_INCIDENT,
+    audit_frozen as audit_item023_incident,
+)
 from v5_final.s11_v2_execution_readiness_v7 import (
     DECISION,
     OUTPUT,
@@ -17,7 +24,16 @@ from v5_final.s11_v2_execution_readiness_v7 import (
 
 
 def test_post_item022_checkpoint_or_frozen_readiness_is_valid() -> None:
-    if OUTPUT.exists():
+    if ITEM023_INCIDENT.exists():
+        artifact = _load(OUTPUT)
+        assert historical_artifact_valid(
+            OUTPUT,
+            artifact,
+            digest_field="readiness_digest",
+            decision=DECISION,
+        )
+        assert all(audit_item023_incident()["checks"].values())
+    elif OUTPUT.exists():
         artifact = _load(OUTPUT)
         assert artifact["decision"] == DECISION
         assert _embedded_digest(artifact, "readiness_digest")

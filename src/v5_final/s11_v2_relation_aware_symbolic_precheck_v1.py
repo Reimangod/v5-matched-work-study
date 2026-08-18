@@ -10,6 +10,8 @@ optimizer.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
+from numbers import Real
 from typing import Any, Iterable, Mapping, Sequence
 
 
@@ -79,6 +81,63 @@ def symbolic_check_cost_from_arity(
     return cost
 
 
+def _normalized_jacobian(value: Any) -> tuple[tuple[float, ...], ...]:
+    try:
+        rows = tuple(tuple(row) for row in value)
+    except (TypeError, ValueError) as error:
+        raise RelationAwareSymbolicPrecheckError(
+            "relation Jacobian is invalid"
+        ) from error
+    normalized: list[tuple[float, ...]] = []
+    for row in rows:
+        converted: list[float] = []
+        for entry in row:
+            if isinstance(entry, bool) or not isinstance(entry, Real):
+                raise RelationAwareSymbolicPrecheckError(
+                    "relation Jacobian contains a non-real value"
+                )
+            number = float(entry)
+            if not math.isfinite(number):
+                raise RelationAwareSymbolicPrecheckError(
+                    "relation Jacobian contains a non-finite value"
+                )
+            converted.append(number)
+        normalized.append(tuple(converted))
+    return tuple(normalized)
+
+
+def _relation_jacobian(candidate: Any) -> tuple[tuple[float, ...], ...]:
+    missing = object()
+    direct = getattr(candidate, "jacobian", missing)
+    transformation = getattr(candidate, "transformation", missing)
+    nested = (
+        missing
+        if transformation is missing
+        else getattr(transformation, "jacobian", missing)
+    )
+    if direct is missing and nested is missing:
+        raise RelationAwareSymbolicPrecheckError(
+            "relation metadata is incomplete"
+        )
+    direct_value = None if direct is missing else _normalized_jacobian(direct)
+    nested_value = None if nested is missing else _normalized_jacobian(nested)
+    if (
+        direct_value is not None
+        and nested_value is not None
+        and direct_value != nested_value
+    ):
+        raise RelationAwareSymbolicPrecheckError(
+            "direct and nested relation Jacobians differ"
+        )
+    if direct_value is not None:
+        return direct_value
+    if nested_value is None:
+        raise RelationAwareSymbolicPrecheckError(
+            "relation metadata is incomplete"
+        )
+    return nested_value
+
+
 def relation_symbolic_cost(candidate: Any) -> RelationSymbolicCostV1:
     """Validate one parent-native relation and derive its outcome-free cost."""
 
@@ -87,11 +146,11 @@ def relation_symbolic_cost(candidate: Any) -> RelationSymbolicCostV1:
         kind = candidate.kind
         source_indices = tuple(candidate.source_pool_indices)
         target_indices = tuple(candidate.target_pool_indices)
-        jacobian = tuple(tuple(row) for row in candidate.jacobian)
     except (AttributeError, TypeError) as error:
         raise RelationAwareSymbolicPrecheckError(
             "relation metadata is incomplete"
         ) from error
+    jacobian = _relation_jacobian(candidate)
     if not isinstance(candidate_id, str) or not candidate_id:
         raise RelationAwareSymbolicPrecheckError("candidate ID is invalid")
     if not isinstance(kind, str) or kind not in REGISTERED_RELATION_ARITIES:
@@ -106,6 +165,19 @@ def relation_symbolic_cost(candidate: Any) -> RelationSymbolicCostV1:
         raise RelationAwareSymbolicPrecheckError(
             "relation Jacobian dimensions differ from arity"
         )
+    transformation = getattr(candidate, "transformation", None)
+    if transformation is not None:
+        try:
+            source_slots = tuple(transformation.source_slots)
+            target_slots = tuple(transformation.target_slots)
+        except (AttributeError, TypeError) as error:
+            raise RelationAwareSymbolicPrecheckError(
+                "nested relation slot metadata is incomplete"
+            ) from error
+        if len(source_slots) != source or len(target_slots) != target:
+            raise RelationAwareSymbolicPrecheckError(
+                "nested relation slot dimensions differ from arity"
+            )
     deletion = target == 0
     return RelationSymbolicCostV1(
         candidate_id=candidate_id,

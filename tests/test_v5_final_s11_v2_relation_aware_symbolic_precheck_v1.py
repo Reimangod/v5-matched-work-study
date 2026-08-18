@@ -3,10 +3,15 @@ from __future__ import annotations
 import inspect
 import hashlib
 import json
+import math
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
+
+from dvg_obs_ceo.block_ir import CompressionCandidate
+from dvg_obs_ceo.quadratic import ConstraintTargetIR
 
 from v5_final.s11_v2_native_preparation_runtime_v1 import (
     CumulativeVerifierLedger,
@@ -14,6 +19,7 @@ from v5_final.s11_v2_native_preparation_runtime_v1 import (
     relation_aware_session_upper_bound,
 )
 from v5_final.s11_v2_prepared_executor_v1 import run_typed_verifier_session
+from v5_final.s11_v2_queue_native_adapter import QueueV2NativeAdapter
 from v5_final.s11_v2_relation_aware_symbolic_precheck_v1 import (
     MAX_COUNTER,
     REGISTERED_RELATION_ARITIES,
@@ -80,6 +86,39 @@ def _catalog_records() -> list[dict]:
     ]
 
 
+def _actual_parent_candidate(record: dict) -> CompressionCandidate:
+    transformation = ConstraintTargetIR.create(
+        constraint_matrix=np.asarray(record["constraint_matrix"], dtype=np.float64),
+        constraint_rhs=np.asarray(record["constraint_rhs"], dtype=np.float64),
+        offset=np.asarray(record["offset"], dtype=np.float64),
+        jacobian=np.asarray(record["jacobian"], dtype=np.float64),
+        source_slots=record["source_slots"],
+        target_slots=record["target_slots"],
+        generator_normalization=record["generator_normalization"],
+        orientation=record["orientation"],
+        units=record["units"],
+    )
+    return CompressionCandidate(
+        candidate_id=record["candidate_id"],
+        equivalence_class_id=record["equivalence_class_id"],
+        kind=record["kind"],
+        source_block_id=record["source_block_id"],
+        source_pool_indices=tuple(record["source_pool_indices"]),
+        target_family=record["target_family"],
+        target_pool_indices=tuple(record["target_pool_indices"]),
+        removed_source_slots=tuple(record["removed_source_slots"]),
+        transformation=transformation,
+        target_operator_digests=tuple(record["target_operator_digests"]),
+        semantic_conflict_positions=tuple(record["semantic_conflict_positions"]),
+        numerical_context_digest=record["numerical_context_digest"],
+        exact_generator_relation=(
+            None
+            if record["exact_generator_relation"] is None
+            else tuple(record["exact_generator_relation"])
+        ),
+    )
+
+
 def test_registered_costs_match_verifier_operation_enumeration() -> None:
     source = json.loads(SOURCE_CATALOG.read_text(encoding="utf-8"))
     assert {case["case_id"] for case in source["cases"]} == {
@@ -114,6 +153,27 @@ def test_registered_costs_match_verifier_operation_enumeration() -> None:
             + [*(f"reconstruct-{index}" for index in target)]
         )
         assert derived.symbolic_check_cost == independently_enumerated
+
+
+def test_all_frozen_records_use_actual_parent_shape_and_conservative_cost() -> None:
+    records = _catalog_records()
+    assert len(records) == 949
+    assert {record["kind"] for record in records} == set(
+        REGISTERED_RELATION_ARITIES
+    )
+    for record in records:
+        candidate = _actual_parent_candidate(record)
+        assert not hasattr(candidate, "jacobian")
+        derived = relation_symbolic_cost(candidate)
+        source = derived.source_arity
+        target = derived.target_arity
+        reconstructed_required_checks = (
+            0
+            if derived.deletion_shortcut
+            else source + target + source * (source - 1) // 2 + target
+        )
+        assert derived.symbolic_check_cost >= reconstructed_required_checks
+        assert math.isfinite(float(derived.symbolic_check_cost))
 
 
 def test_bound_dominates_every_preserved_numeric_checkpoint() -> None:
@@ -161,7 +221,7 @@ def test_item022_selected_relations_require_452_without_outcomes() -> None:
     h6 = next(case for case in source["cases"] if case["case_id"] == "h6-1.5")
     catalog = SimpleNamespace(
         candidates=tuple(
-            _candidate_from_record(record)
+            _actual_parent_candidate(record)
             for record in h6["source_structural_catalog"]
         )
     )
@@ -178,6 +238,40 @@ def test_item022_selected_relations_require_452_without_outcomes() -> None:
         candidate_count=427,
         selected_costs=tuple(value.symbolic_check_cost for value in costs),
     ) == 452
+
+
+def test_item023_shares_outcome_free_h6_source_catalog_and_requires_452() -> None:
+    adapter = QueueV2NativeAdapter()
+    item022 = adapter.request(adapter.queue["items"][22]["queue_item_id"])
+    item023 = adapter.request(adapter.queue["items"][23]["queue_item_id"])
+    assert item022.item["source_identity"] == item023.item["source_identity"]
+    assert item022.admitted_candidate_ids == item023.admitted_candidate_ids
+    assert len(item023.admitted_candidate_ids) == 427
+    assert item023.item["candidate_binding"]["candidate_outcomes_used"] is False
+
+    source = json.loads(SOURCE_CATALOG.read_text(encoding="utf-8"))
+    h6 = next(case for case in source["cases"] if case["case_id"] == "h6-1.5")
+    catalog = SimpleNamespace(
+        candidates=tuple(
+            _actual_parent_candidate(record)
+            for record in h6["source_structural_catalog"]
+        )
+    )
+    selected = tuple(
+        json.loads(ITEM022_TOP_K.read_text(encoding="utf-8"))[
+            "selected_candidate_ids"
+        ]
+    )
+    assert set(selected).issubset(item023.admitted_candidate_ids)
+    costs = selected_relation_costs(
+        catalog=catalog, selected_candidate_ids=selected
+    )
+    assert [value.symbolic_check_cost for value in costs] == [5, 5, 5, 10]
+    assert relation_aware_symbolic_upper_bound(
+        candidate_count=len(item023.admitted_candidate_ids),
+        selected_costs=tuple(value.symbolic_check_cost for value in costs),
+    ) == 452
+    assert item023.item["verifier_componentwise_cap"]["N_symbolic_checks"] == 447
 
 
 def test_item022_outcome_free_preview_preserves_frozen_selection(
@@ -268,6 +362,50 @@ def test_unknown_missing_invalid_and_overflowing_relations_fail_closed() -> None
     with pytest.raises(RelationAwareSymbolicPrecheckError, match="overflow"):
         relation_aware_symbolic_upper_bound(
             candidate_count=MAX_COUNTER, selected_costs=(1,)
+        )
+
+
+def test_nested_direct_ambiguity_and_invalid_values_fail_closed() -> None:
+    base = dict(
+        candidate_id="candidate-1",
+        kind="mvp-to-ovp-diff",
+        source_pool_indices=(1, 2),
+        target_pool_indices=(3,),
+    )
+    nested = SimpleNamespace(
+        jacobian=((1.0,), (-1.0,)),
+        source_slots=("source-1", "source-2"),
+        target_slots=("target-1",),
+    )
+    derived = relation_symbolic_cost(SimpleNamespace(transformation=nested, **base))
+    assert derived.symbolic_check_cost == 5
+    with pytest.raises(RelationAwareSymbolicPrecheckError, match="differ"):
+        relation_symbolic_cost(
+            SimpleNamespace(
+                jacobian=((1.0,), (1.0,)), transformation=nested, **base
+            )
+        )
+    with pytest.raises(RelationAwareSymbolicPrecheckError, match="non-finite"):
+        relation_symbolic_cost(
+            SimpleNamespace(
+                transformation=SimpleNamespace(
+                    jacobian=((1.0,), (float("nan"),)),
+                    source_slots=nested.source_slots,
+                    target_slots=nested.target_slots,
+                ),
+                **base,
+            )
+        )
+    with pytest.raises(RelationAwareSymbolicPrecheckError, match="slot dimensions"):
+        relation_symbolic_cost(
+            SimpleNamespace(
+                transformation=SimpleNamespace(
+                    jacobian=nested.jacobian,
+                    source_slots=("source-1",),
+                    target_slots=nested.target_slots,
+                ),
+                **base,
+            )
         )
 
 
