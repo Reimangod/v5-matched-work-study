@@ -17,10 +17,25 @@ from v5_final.s11_v2_execution_readiness_v6 import (
     audit_frozen,
     inspect_checkpoint,
 )
+from v5_final.s11_v2_item022_terminal_reconciliation_v1 import (
+    RESULT,
+    historical_artifact_valid,
+    inspect_terminal_reconciliation,
+)
 
 
 def test_pre_retry_checkpoint_or_frozen_readiness_is_valid() -> None:
-    if OUTPUT.exists():
+    if RESULT.exists():
+        artifact = _load(OUTPUT)
+        assert historical_artifact_valid(
+            OUTPUT,
+            artifact,
+            digest_field="readiness_digest",
+            decision=DECISION,
+        )
+        successor = inspect_terminal_reconciliation()
+        assert all(successor["checks"].values())
+    elif OUTPUT.exists():
         artifact = _load(OUTPUT)
         assert artifact["decision"] == DECISION
         assert _embedded_digest(artifact, "readiness_digest")

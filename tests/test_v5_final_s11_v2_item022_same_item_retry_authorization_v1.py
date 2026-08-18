@@ -13,10 +13,18 @@ from v5_final.s11_v2_item022_same_item_retry_authorization_v1 import (
     audit_frozen,
     inspect_retry_readiness,
 )
+from v5_final.s11_v2_item022_terminal_reconciliation_v1 import (
+    RESULT,
+    inspect_terminal_reconciliation,
+)
 
 
 def test_retry_readiness_or_frozen_authorization_is_valid() -> None:
-    if OUTPUT.exists():
+    if RESULT.exists():
+        successor = inspect_terminal_reconciliation()
+        assert all(successor["checks"].values())
+        assert successor["observed"]["terminal_status"] == "CAP_REJECTED"
+    elif OUTPUT.exists():
         artifact = _load(OUTPUT)
         assert artifact["decision"] == DECISION
         assert _embedded_digest(artifact, "authorization_digest")
@@ -27,6 +35,14 @@ def test_retry_readiness_or_frozen_authorization_is_valid() -> None:
 
 
 def test_item022_retry_bound_is_reconstructed_without_outcome_services() -> None:
+    if RESULT.exists():
+        successor = inspect_terminal_reconciliation()
+        assert all(successor["checks"].values())
+        observed = successor["observed"]
+        assert observed["corrected_symbolic_upper_bound"] == 452
+        assert observed["frozen_symbolic_cap"] == 447
+        assert not any(observed["attempt2_delta"].values())
+        return
     evidence = inspect_retry_readiness()
     assert all(evidence["checks"].values())
     observed = evidence["observed"]

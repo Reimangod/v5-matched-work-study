@@ -7,9 +7,20 @@ from v5_final.s11_v2_item022_symbolic_precheck_incident_v1 import (
     audit_frozen,
     inspect_incident,
 )
+from v5_final.s11_v2_item022_terminal_reconciliation_v1 import (
+    RESULT,
+    inspect_terminal_reconciliation,
+)
 
 
 def test_item022_incident_reconstructs_nonconservative_symbolic_precheck() -> None:
+    if RESULT.exists():
+        successor = inspect_terminal_reconciliation()
+        assert all(successor["checks"].values())
+        assert successor["observed"]["corrected_symbolic_upper_bound"] == 452
+        assert successor["observed"]["frozen_symbolic_cap"] == 447
+        assert successor["observed"]["terminal_status"] == "CAP_REJECTED"
+        return
     evidence = inspect_incident()
     assert all(evidence["checks"].values())
     assert evidence["observed"]["frozen_symbolic_precheck"] == 447
