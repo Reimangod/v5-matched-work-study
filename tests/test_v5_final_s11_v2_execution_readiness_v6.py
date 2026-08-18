@@ -13,6 +13,7 @@ from v5_final.s11_v2_execution_readiness_v6 import (
     _embedded_digest,
     _live_pr_snapshot,
     _load,
+    _require_minimum_free_storage,
     audit_frozen,
     inspect_checkpoint,
 )
@@ -40,6 +41,18 @@ def test_readiness_digest_rejects_tamper() -> None:
     assert _embedded_digest(value, "readiness_digest")
     value["decision"] = "TAMPERED"
     assert not _embedded_digest(value, "readiness_digest")
+
+
+def test_post_verification_storage_is_fail_closed(monkeypatch) -> None:
+    from v5_final import s11_v2_execution_readiness_v6 as subject
+
+    monkeypatch.setattr(
+        subject.shutil,
+        "disk_usage",
+        lambda path: SimpleNamespace(free=subject.MINIMUM_FREE_BYTES - 1),
+    )
+    with pytest.raises(S11V2ExecutionReadinessV6Error, match="fell below 40 GiB"):
+        _require_minimum_free_storage()
 
 
 def test_live_repository_check_retries_503_then_requires_exact_head(

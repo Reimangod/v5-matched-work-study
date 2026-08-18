@@ -86,6 +86,15 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def _require_minimum_free_storage() -> int:
+    available = int(shutil.disk_usage(ROOT).free)
+    if available < MINIMUM_FREE_BYTES:
+        raise S11V2ExecutionReadinessV6Error(
+            "free storage fell below 40 GiB during readiness verification"
+        )
+    return available
+
+
 def _live_pr_snapshot(
     *, expected_head: str, attempts: int = 4, initial_delay_seconds: float = 1.0
 ) -> dict[str, Any]:
@@ -299,6 +308,7 @@ def capture() -> dict[str, Any]:
     if not scoped["passed"] or not full["passed"]:
         raise S11V2ExecutionReadinessV6Error("local verification suite failed")
     live = _live_pr_snapshot(expected_head=head)
+    available_after_verification = _require_minimum_free_storage()
     body = {
         "schema": "v5-final.s11-v2-execution-readiness.v6",
         "stage": "PHASE_C_ITEM022_PREVERIFIER_RETRY_READINESS",
@@ -312,8 +322,9 @@ def capture() -> dict[str, Any]:
             "recursive_submodule_status": _git("submodule", "status", "--recursive").splitlines(),
         },
         "storage": {
-            "available_bytes": shutil.disk_usage(ROOT).free,
+            "available_bytes": available_after_verification,
             "required_bytes": MINIMUM_FREE_BYTES,
+            "measured_after_local_and_live_verification": True,
         },
         "tests": {
             "scoped": scoped,
