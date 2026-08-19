@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from v5_final import gpu_rtx2080ti_s1_hardware_audit_v1 as s1
 
@@ -49,6 +50,20 @@ def test_missing_optional_diagnostic_command_is_recorded(monkeypatch) -> None:
     assert result["returncode"] == 127
     assert result["stdout"] == ""
     assert "nvcc not found" in result["stderr"]
+
+
+def test_cgroup_memory_limit_takes_precedence_over_host_memory(
+    tmp_path: Path, monkeypatch
+) -> None:
+    memory_max = tmp_path / "memory.max"
+    memory_max.write_text(str(16 * s1.GIB), encoding="utf-8")
+    monkeypatch.setattr(
+        s1,
+        "_cgroup_memory_limit_bytes",
+        lambda: s1._cgroup_memory_limit_bytes((memory_max,)),
+    )
+    monkeypatch.setattr(s1.os, "sysconf", lambda name: 1024**3 if name == "SC_PAGE_SIZE" else 404)
+    assert s1._memory_total_bytes() == 16 * s1.GIB
 
 
 def test_capture_go_requires_exact_hardware_and_capacity(monkeypatch) -> None:

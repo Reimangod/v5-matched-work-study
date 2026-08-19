@@ -82,13 +82,39 @@ def _parse_gpu_rows(stdout: str) -> list[dict[str, Any]]:
     return rows
 
 
+def _cgroup_memory_limit_bytes(
+    paths: tuple[Path, ...] = (
+        Path("/sys/fs/cgroup/memory.max"),
+        Path("/sys/fs/cgroup/memory/memory.limit_in_bytes"),
+    ),
+) -> int | None:
+    for path in paths:
+        try:
+            raw = path.read_text(encoding="utf-8").strip()
+        except (FileNotFoundError, OSError):
+            continue
+        if raw == "max":
+            continue
+        try:
+            value = int(raw)
+        except ValueError:
+            continue
+        if value > 0:
+            return value
+    return None
+
+
 def _memory_total_bytes() -> int:
     try:
         pages = os.sysconf("SC_PHYS_PAGES")
         page_size = os.sysconf("SC_PAGE_SIZE")
-        return int(pages * page_size)
+        physical = int(pages * page_size)
     except (AttributeError, OSError, TypeError, ValueError):
-        return 0
+        physical = 0
+    cgroup_limit = _cgroup_memory_limit_bytes()
+    if cgroup_limit is None:
+        return physical
+    return min(physical, cgroup_limit) if physical > 0 else cgroup_limit
 
 
 def capture(*, runner: Callable[[list[str]], dict[str, Any]] = _run) -> dict[str, Any]:
