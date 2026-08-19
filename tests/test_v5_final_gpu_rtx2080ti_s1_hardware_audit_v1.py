@@ -31,7 +31,7 @@ def test_gpu_row_parser_is_strict() -> None:
     assert rows == [
         {
             "index": 0,
-            "uuid": "GPU-test",
+            "uuid_sha256": s1._sha256(b"GPU-test"),
             "name": "NVIDIA GeForce RTX 2080 Ti",
             "memory_total_mib": 11019,
             "driver_version": "535.1",
@@ -101,6 +101,21 @@ def test_active_gpu_process_fails_closed(monkeypatch) -> None:
     artifact = s1.capture(runner=active_runner)
     assert artifact["decision"] == "NO_GO_RTX2080TI_S1_HARDWARE_AUDIT"
     assert "no_preexisting_compute_process" in artifact["failed_checks"]
+
+
+def test_public_artifact_does_not_contain_raw_gpu_uuid(monkeypatch) -> None:
+    monkeypatch.setattr(s1.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(s1.os, "cpu_count", lambda: 2)
+    monkeypatch.setattr(s1, "_memory_total_bytes", lambda: 8 * s1.GIB)
+    monkeypatch.setattr(
+        s1.shutil,
+        "disk_usage",
+        lambda _: s1.shutil._ntuple_diskusage(100 * s1.GIB, 40 * s1.GIB, 60 * s1.GIB),
+    )
+    artifact = s1.capture(runner=_runner)
+    serialized = json.dumps(artifact)
+    assert "GPU-test" not in serialized
+    assert artifact["gpu"]["active_compute_process_count"] == 0
 
 
 def test_audit_accepts_digest_bound_go_artifact(tmp_path, monkeypatch) -> None:

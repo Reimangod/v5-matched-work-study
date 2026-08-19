@@ -69,7 +69,7 @@ def _parse_gpu_rows(stdout: str) -> list[dict[str, Any]]:
             rows.append(
                 {
                     "index": int(index),
-                    "uuid": uuid,
+                    "uuid_sha256": _sha256(uuid.encode("utf-8")),
                     "name": name,
                     "memory_total_mib": int(memory_mib),
                     "driver_version": driver,
@@ -80,6 +80,17 @@ def _parse_gpu_rows(stdout: str) -> list[dict[str, Any]]:
         except ValueError:
             continue
     return rows
+
+
+def _sanitized_command_evidence(result: dict[str, Any]) -> dict[str, Any]:
+    stdout = str(result.get("stdout", ""))
+    return {
+        "arguments": result["arguments"],
+        "returncode": result["returncode"],
+        "stdout_sha256": _sha256(stdout.encode("utf-8")),
+        "stdout_line_count": len([line for line in stdout.splitlines() if line.strip()]),
+        "stderr": result.get("stderr", ""),
+    }
 
 
 def _cgroup_memory_limit_bytes(
@@ -176,9 +187,9 @@ def capture(*, runner: Callable[[list[str]], dict[str, Any]] = _run) -> dict[str
         },
         "gpu": {
             "rows": gpu_rows,
-            "active_compute_rows": active_compute_rows,
-            "nvidia_smi_query": gpu_query,
-            "compute_apps_query": compute_apps,
+            "active_compute_process_count": len(active_compute_rows),
+            "nvidia_smi_query": _sanitized_command_evidence(gpu_query),
+            "compute_apps_query": _sanitized_command_evidence(compute_apps),
             "nvcc_diagnostic": nvcc,
         },
         "service_contract": {
