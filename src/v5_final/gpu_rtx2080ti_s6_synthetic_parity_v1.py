@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import statistics
+import sys
 import time
 from pathlib import Path
 from typing import Any, Sequence
@@ -195,6 +196,9 @@ def _chain_case() -> dict[str, Any]:
 
 
 def _resource_path_probe() -> dict[str, Any]:
+    vendor_root = ROOT / "provenance/dvg-obs-ceo/vendor/ceo-adapt-vqe"
+    if str(vendor_root) not in sys.path:
+        sys.path.insert(0, str(vendor_root))
     from adaptvqe.circuits import cnot_count, cnot_depth
     from adaptvqe.op_conv import get_qasm
     from qiskit import QuantumCircuit

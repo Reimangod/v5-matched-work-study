@@ -30,3 +30,8 @@ def test_cpu_analytic_gradient_matches_finite_difference() -> None:
 def test_array_digest_is_repeatable() -> None:
     value = np.asarray([1 + 2j, 3 - 4j], dtype=np.complex128)
     assert s6._array_sha(value) == s6._array_sha(value.copy())
+
+
+def test_resource_probe_uses_pinned_vendor_tree() -> None:
+    vendor = s6.ROOT / "provenance/dvg-obs-ceo/vendor/ceo-adapt-vqe/adaptvqe"
+    assert vendor.is_dir()
