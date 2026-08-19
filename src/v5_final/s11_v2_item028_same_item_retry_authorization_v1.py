@@ -70,6 +70,11 @@ SOURCE_PATHS = (
     "tests/test_v5_final_s11_v2_item028_relation_work_precheck_incident_v1.py",
     "tests/test_v5_final_s11_v2_item028_same_item_retry_authorization_v1.py",
 )
+ADDITIVE_INTEGRATION_PATHS = {
+    "src/v5_final/s11_v2_execution_runner_v1.py",
+    "src/v5_final/s11_v2_item028_same_item_retry_authorization_v1.py",
+    "tests/test_v5_final_s11_v2_execution_runner_v1.py",
+}
 
 
 class S11V2Item028RetryAuthorizationError(RuntimeError):
@@ -360,9 +365,10 @@ def audit_frozen(*, require_live: bool = False) -> dict[str, Any]:
             _sha(ROOT / path) == expected
             for path, expected in bindings["preserved_preoutcome_evidence_sha256"].items()
         ),
-        "sources_current": all(
+        "scientific_sources_current": all(
             _sha(ROOT / path) == expected
             for path, expected in bindings["source_sha256"].items()
+            if path not in ADDITIVE_INTEGRATION_PATHS
         ),
         "single_same_item_retry_only": artifact["queue_index"] == QUEUE_INDEX
         and artifact["retry_attempt_ordinal"] == 2

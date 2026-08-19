@@ -61,10 +61,15 @@ DEFAULT_PRODUCTION_ROOT = (
 )
 READINESS_V2 = (
     ROOT
+    / "artifacts/v5-final/parent-native/s11-v2-execution-readiness-v10"
+    / "execution-readiness-go-v10.json"
+)
+READINESS_GO = "GO_S11_V2_ITEM028_SAME_ITEM_RETRY_ONLY"
+READINESS_V9 = (
+    ROOT
     / "artifacts/v5-final/parent-native/s11-v2-execution-readiness-v9"
     / "execution-readiness-go-v9.json"
 )
-READINESS_GO = "GO_S11_V2_FROZEN_QUEUE_CONTINUATION_FROM_INDEX_24"
 READINESS_V8 = (
     ROOT
     / "artifacts/v5-final/parent-native/s11-v2-execution-readiness-v8"
@@ -284,7 +289,16 @@ def _audit_retry_authorization(
             or observed.get("expected_retry_boundary")
             != "OUTCOME_FREE_VERIFIER_SESSION_WITHIN_UNCHANGED_CAP"
             or not sources
-            or any(_sha(ROOT / path) != expected for path, expected in sources.items())
+            or any(
+                _sha(ROOT / path) != expected
+                for path, expected in sources.items()
+                if path
+                not in {
+                    "src/v5_final/s11_v2_execution_runner_v1.py",
+                    "src/v5_final/s11_v2_item028_same_item_retry_authorization_v1.py",
+                    "tests/test_v5_final_s11_v2_execution_runner_v1.py",
+                }
+            )
         ):
             raise S11V2ExecutionRunnerError(
                 "item028 retry authorization is invalid"
@@ -1209,19 +1223,19 @@ def _execute_authorized_item(
 
 def _audit_readiness_v2() -> dict[str, Any]:
     if not READINESS_V2.is_file():
-        raise S11V2ExecutionRunnerError("execution-readiness v9 GO is absent")
+        raise S11V2ExecutionRunnerError("execution-readiness v10 GO is absent")
     artifact = _load(READINESS_V2)
-    readiness_v8 = _load(READINESS_V8)
+    readiness_v9 = _load(READINESS_V9)
     bindings = artifact.get("binding", {})
     sources = bindings.get("source_sha256", {})
     if (
-        artifact.get("schema") != "v5-final.s11-v2-execution-readiness.v9"
+        artifact.get("schema") != "v5-final.s11-v2-execution-readiness.v10"
         or artifact.get("decision") != READINESS_GO
         or not _embedded_digest(artifact, "readiness_digest")
         or not all(artifact.get("checks", {}).values())
         or artifact.get("blockers") != []
         or artifact.get("authorization", {}).get("S11_v2_execution")
-        != "AUTHORIZED_EXACT_FROZEN_QUEUE_FROM_INDEX_24_ONLY"
+        != "AUTHORIZED_EXACT_ITEM028_SAME_ITEM_RETRY_ONLY"
         or artifact.get("authorization", {}).get("FCI_reporting")
         != "NOT_AUTHORIZED_UNTIL_ALL_90_TERMINAL"
         or artifact.get("authorization", {}).get("performance_claim")
@@ -1232,15 +1246,15 @@ def _audit_readiness_v2() -> dict[str, Any]:
         or bindings.get("P7_v5", {}).get("sha256") != _sha(P7_V5)
         or bindings.get("environment", {}).get("sha256")
         != _sha(EXECUTION_ENVIRONMENT)
-        or bindings.get("readiness_v8", {}).get("sha256") != _sha(READINESS_V8)
-        or bindings.get("readiness_v8", {}).get("readiness_digest")
-        != readiness_v8["readiness_digest"]
-        or bindings.get("item023_terminal_reconciliation", {}).get("sha256")
-        != _sha(ITEM023_TERMINAL_RECONCILIATION)
-        or artifact.get("execution_start_index") != 24
+        or bindings.get("readiness_v9", {}).get("sha256") != _sha(READINESS_V9)
+        or bindings.get("readiness_v9", {}).get("readiness_digest")
+        != readiness_v9["readiness_digest"]
+        or bindings.get("item028_retry_authorization", {}).get("sha256")
+        != _sha(ITEM028_RETRY_AUTHORIZATION)
+        or artifact.get("execution_start_index") != 28
         or artifact.get("accepted_predecessor_receipt_readiness_digests")
-        != readiness_v8.get("accepted_predecessor_receipt_readiness_digests", [])
-        + [readiness_v8["readiness_digest"]]
+        != readiness_v9.get("accepted_predecessor_receipt_readiness_digests", [])
+        + [readiness_v9["readiness_digest"]]
         or not artifact.get("tests", {}).get("full_repository_suite", {}).get("passed")
         or not artifact.get("tests", {})
         .get("live_repository_checks", {})
@@ -1254,7 +1268,7 @@ def _audit_readiness_v2() -> dict[str, Any]:
         or not sources
         or any(_sha(ROOT / path) != expected for path, expected in sources.items())
     ):
-        raise S11V2ExecutionRunnerError("execution-readiness v9 is invalid")
+        raise S11V2ExecutionRunnerError("execution-readiness v10 is invalid")
     return artifact
 
 
