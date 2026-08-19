@@ -41,6 +41,11 @@ class RelationSymbolicCostV1:
     target_arity: int
     deletion_shortcut: bool
     symbolic_check_cost: int
+    sparse_expm_per_probe: int
+    state_probe_vectors_per_probe: int
+    generator_materialization_upper_bound: int
+    circuit_operator_builds_per_probe: int
+    rewrite_verifications: int
 
 
 def _checked_nonnegative_int(value: Any, *, field: str) -> int:
@@ -179,6 +184,7 @@ def relation_symbolic_cost(candidate: Any) -> RelationSymbolicCostV1:
                 "nested relation slot dimensions differ from arity"
             )
     deletion = target == 0
+    numeric_arity = 0 if deletion else source + target
     return RelationSymbolicCostV1(
         candidate_id=candidate_id,
         relation_kind=kind,
@@ -190,6 +196,11 @@ def relation_symbolic_cost(candidate: Any) -> RelationSymbolicCostV1:
             target_arity=target,
             deletion_shortcut=deletion,
         ),
+        sparse_expm_per_probe=numeric_arity,
+        state_probe_vectors_per_probe=0 if deletion else 1,
+        generator_materialization_upper_bound=numeric_arity,
+        circuit_operator_builds_per_probe=0 if deletion else 1,
+        rewrite_verifications=1,
     )
 
 

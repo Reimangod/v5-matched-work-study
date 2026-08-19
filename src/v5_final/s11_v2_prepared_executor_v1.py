@@ -114,9 +114,7 @@ def typed_session_upper_bound(
     )
     return relation_aware_session_upper_bound(
         candidate_count=admitted_count,
-        selected_relation_costs=tuple(
-            record.symbolic_check_cost for record in costs
-        ),
+        selected_relation_costs=costs,
         source_block_count=len(context.runtime.ansatz.cumulative_parameter_counts),
         maximum_relation_terms=_maximum_relation_terms(catalog),
         matrix_dimension=1 << int(context.pool.n),

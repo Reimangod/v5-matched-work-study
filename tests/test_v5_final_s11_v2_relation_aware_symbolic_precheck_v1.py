@@ -50,6 +50,12 @@ ITEM022_TOP_K = (
     / "round-0001-session/checkpoints/top-k-freeze-v2.json"
 )
 ITEM022_BINDING = ITEM022_TOP_K.with_name("session-binding-v2.json")
+ITEM028_TOP_K = (
+    ROOT
+    / "artifacts/v5-final/parent-native/s11-v2-production-execution-v1"
+    / "verifier-ledgers/0028-7809ff950f7654f1"
+    / "round-0001-session/checkpoints/top-k-freeze-v2.json"
+)
 QUEUE_V2 = (
     ROOT
     / "artifacts/v5-final/parent-native/s11-v2-queue-freeze-v2"
@@ -153,6 +159,18 @@ def test_registered_costs_match_verifier_operation_enumeration() -> None:
             + [*(f"reconstruct-{index}" for index in target)]
         )
         assert derived.symbolic_check_cost == independently_enumerated
+        numeric_arity = 0 if derived.deletion_shortcut else (
+            derived.source_arity + derived.target_arity
+        )
+        assert derived.sparse_expm_per_probe == numeric_arity
+        assert derived.state_probe_vectors_per_probe == (
+            0 if derived.deletion_shortcut else 1
+        )
+        assert derived.generator_materialization_upper_bound == numeric_arity
+        assert derived.circuit_operator_builds_per_probe == (
+            0 if derived.deletion_shortcut else 1
+        )
+        assert derived.rewrite_verifications == 1
 
 
 def test_all_frozen_records_use_actual_parent_shape_and_conservative_cost() -> None:
@@ -197,12 +215,32 @@ def test_bound_dominates_every_preserved_numeric_checkpoint() -> None:
         for path in sorted(checkpoint_root.glob("numeric-*.json")):
             numeric = json.loads(path.read_text(encoding="utf-8"))
             descriptor = descriptors[numeric["candidate_id"]]
-            predicted = symbolic_check_cost_from_arity(
-                source_arity=len(descriptor["source_generator_digests"]),
-                target_arity=len(descriptor["target_generator_digests"]),
-                deletion_shortcut=bool(descriptor["deletion_shortcut"]),
+            source_arity = len(descriptor["source_generator_digests"])
+            target_arity = len(descriptor["target_generator_digests"])
+            deletion = bool(descriptor["deletion_shortcut"])
+            symbolic = symbolic_check_cost_from_arity(
+                source_arity=source_arity,
+                target_arity=target_arity,
+                deletion_shortcut=deletion,
             )
-            assert predicted >= numeric["primitive_delta"]["N_symbolic_checks"]
+            delta = numeric["primitive_delta"]
+            probes = delta["N_state_probe_vectors"]
+            numeric_arity = 0 if deletion else source_arity + target_arity
+            probe_units = 0 if deletion else 1
+            assert symbolic >= delta["N_symbolic_checks"]
+            assert numeric_arity * probes >= delta[
+                "N_sparse_expm_multiply"
+            ]
+            assert probe_units * probes >= delta[
+                "N_state_probe_vectors"
+            ]
+            assert numeric_arity >= delta[
+                "N_generator_materializations"
+            ]
+            assert probe_units * probes >= delta[
+                "N_circuit_operator_builds"
+            ]
+            assert 1 >= delta["rewrite_verifications"]
             observed += 1
     assert observed > 0
 
@@ -238,6 +276,43 @@ def test_item022_selected_relations_require_452_without_outcomes() -> None:
         candidate_count=427,
         selected_costs=tuple(value.symbolic_check_cost for value in costs),
     ) == 452
+
+
+def test_item028_relation_work_bound_covers_every_numeric_component() -> None:
+    source = json.loads(SOURCE_CATALOG.read_text(encoding="utf-8"))
+    h6 = next(case for case in source["cases"] if case["case_id"] == "h6-1.5")
+    catalog = SimpleNamespace(
+        candidates=tuple(
+            _actual_parent_candidate(record)
+            for record in h6["source_structural_catalog"]
+        )
+    )
+    selected = tuple(
+        json.loads(ITEM028_TOP_K.read_text(encoding="utf-8"))[
+            "selected_candidate_ids"
+        ]
+    )
+    costs = selected_relation_costs(
+        catalog=catalog, selected_candidate_ids=selected
+    )
+    upper = relation_aware_session_upper_bound(
+        candidate_count=427,
+        selected_relation_costs=costs,
+        source_block_count=int(h6["source_resources"]["logical_block_count"]),
+        maximum_relation_terms=5,
+        matrix_dimension=4096,
+        qubit_count=12,
+        probe_count=3,
+    )
+    assert [value.sparse_expm_per_probe for value in costs] == [3, 3, 3, 5]
+    assert upper["N_symbolic_checks"] == 452
+    assert upper["N_sparse_expm_multiply"] == 42
+    assert upper["N_state_probe_vectors"] == 12
+    assert upper["N_generator_materializations"] == 14
+    assert upper["rewrite_verifications"] == 4
+    adapter = QueueV2NativeAdapter()
+    cap = adapter.queue["items"][28]["verifier_componentwise_cap"]
+    assert all(upper[field] <= cap[field] for field in cap)
 
 
 def test_item023_shares_outcome_free_h6_source_catalog_and_requires_452() -> None:

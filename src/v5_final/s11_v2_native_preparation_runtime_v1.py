@@ -170,7 +170,7 @@ def conservative_session_upper_bound(
 def relation_aware_session_upper_bound(
     *,
     candidate_count: int,
-    selected_relation_costs: Sequence[int],
+    selected_relation_costs: Sequence[Any],
     source_block_count: int,
     maximum_relation_terms: int,
     matrix_dimension: int,
@@ -184,8 +184,8 @@ def relation_aware_session_upper_bound(
     conservative before numeric verification begins.
     """
 
-    costs = tuple(selected_relation_costs)
-    selected_count = len(costs)
+    records = tuple(selected_relation_costs)
+    selected_count = len(records)
     upper = conservative_session_upper_bound(
         candidate_count=candidate_count,
         selected_count=selected_count,
@@ -195,10 +195,40 @@ def relation_aware_session_upper_bound(
         qubit_count=qubit_count,
         probe_count=probe_count,
     )
+    symbolic_costs = tuple(
+        int(getattr(record, "symbolic_check_cost", record)) for record in records
+    )
     upper["N_symbolic_checks"] = relation_aware_symbolic_upper_bound(
         candidate_count=candidate_count,
-        selected_costs=costs,
+        selected_costs=symbolic_costs,
     )
+    # Integer-only callers reproduce the first additive symbolic successor.
+    # Production typed sessions pass validated relation records, allowing every
+    # numeric relation-dependent field to be bounded from the same frozen arity.
+    if records and all(hasattr(record, "sparse_expm_per_probe") for record in records):
+        upper["N_sparse_expm_multiply"] = probe_count * sum(
+            int(record.sparse_expm_per_probe) for record in records
+        )
+        upper["N_state_probe_vectors"] = probe_count * sum(
+            int(record.state_probe_vectors_per_probe) for record in records
+        )
+        upper["N_generator_materializations"] = sum(
+            int(record.generator_materialization_upper_bound) for record in records
+        )
+        # Structural recount builds are already bounded by the frozen formula;
+        # replace only its per-selected numeric-probe term.
+        structural_builds = (
+            source_block_count
+            + 2 * candidate_count * source_block_count
+            if candidate_count > 0
+            else 0
+        )
+        upper["N_circuit_operator_builds"] = structural_builds + probe_count * sum(
+            int(record.circuit_operator_builds_per_probe) for record in records
+        )
+        upper["rewrite_verifications"] = sum(
+            int(record.rewrite_verifications) for record in records
+        )
     return upper
 
 
