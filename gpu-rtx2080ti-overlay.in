@@ -1,0 +1,5 @@
+# GPU-only overlay. The baseline scientific environment remains pinned by
+# provenance/dvg-obs-ceo/uv.lock and is installed first with --frozen.
+numpy==1.23.5
+cupy-cuda12x==13.6.0
+fastrlock==0.8.3
