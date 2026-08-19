@@ -11,12 +11,30 @@ from v5_final.s11_v2_item023_same_item_retry_authorization_v1 import (
     inspect_retry_readiness,
 )
 from v5_final.verifier_v2 import VerifierV2
+from v5_final.s11_v2_item022_terminal_reconciliation_v1 import (
+    historical_artifact_valid,
+)
+from v5_final.s11_v2_item023_terminal_reconciliation_v1 import (
+    OUTPUT as TERMINAL_RECONCILIATION,
+    RECEIPT as ITEM023_RECEIPT,
+    audit_frozen as audit_terminal_reconciliation,
+)
 
 
 def test_item023_retry_reconstructs_same_outcome_free_selection_inputs() -> None:
-    evidence = inspect_retry_readiness()
-    assert all(evidence["checks"].values())
-    observed = evidence["observed"]
+    if ITEM023_RECEIPT.exists():
+        artifact = _load(OUTPUT)
+        assert historical_artifact_valid(
+            OUTPUT,
+            artifact,
+            digest_field="authorization_digest",
+            decision=DECISION,
+        )
+        observed = artifact["observed"]
+    else:
+        evidence = inspect_retry_readiness()
+        assert all(evidence["checks"].values())
+        observed = evidence["observed"]
     assert observed["candidate_count"] == 427
     assert observed["selected_relation_symbolic_costs"] == [5, 5, 5, 10]
     assert observed["corrected_relation_aware_upper_bound"] == 452
@@ -27,7 +45,7 @@ def test_item023_retry_reconstructs_same_outcome_free_selection_inputs() -> None
 
 
 def test_item023_retry_binds_candidate_identity_not_descriptor_storage_order() -> None:
-    evidence = inspect_retry_readiness()
+    evidence = _load(OUTPUT) if ITEM023_RECEIPT.exists() else inspect_retry_readiness()
     assert evidence["checks"][
         "item022_item023_initial_selection_inputs_are_identical"
     ]
@@ -49,7 +67,24 @@ def test_item023_retry_digest_rejects_tamper() -> None:
 
 
 def test_item023_retry_artifact_or_precapture_state_is_valid() -> None:
-    if OUTPUT.exists():
+    if TERMINAL_RECONCILIATION.exists():
+        artifact = _load(OUTPUT)
+        assert historical_artifact_valid(
+            OUTPUT,
+            artifact,
+            digest_field="authorization_digest",
+            decision=DECISION,
+        )
+        assert all(audit_terminal_reconciliation()["checks"].values())
+    elif ITEM023_RECEIPT.exists():
+        artifact = _load(OUTPUT)
+        assert historical_artifact_valid(
+            OUTPUT,
+            artifact,
+            digest_field="authorization_digest",
+            decision=DECISION,
+        )
+    elif OUTPUT.exists():
         artifact = _load(OUTPUT)
         assert artifact["decision"] == DECISION
         assert _embedded_digest(artifact, "authorization_digest")
