@@ -57,10 +57,11 @@ def test_cgroup_memory_limit_takes_precedence_over_host_memory(
 ) -> None:
     memory_max = tmp_path / "memory.max"
     memory_max.write_text(str(16 * s1.GIB), encoding="utf-8")
+    original_cgroup_reader = s1._cgroup_memory_limit_bytes
     monkeypatch.setattr(
         s1,
         "_cgroup_memory_limit_bytes",
-        lambda: s1._cgroup_memory_limit_bytes((memory_max,)),
+        lambda: original_cgroup_reader((memory_max,)),
     )
     monkeypatch.setattr(s1.os, "sysconf", lambda name: 1024**3 if name == "SC_PAGE_SIZE" else 404)
     assert s1._memory_total_bytes() == 16 * s1.GIB
