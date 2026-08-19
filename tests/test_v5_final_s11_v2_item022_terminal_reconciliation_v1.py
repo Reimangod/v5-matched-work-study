@@ -9,7 +9,7 @@ from v5_final.s11_v2_item022_terminal_reconciliation_v1 import (
     _digest,
     _embedded_digest,
     _load,
-    audit_frozen,
+    historical_artifact_valid,
     inspect_terminal_reconciliation,
 )
 
@@ -17,9 +17,14 @@ from v5_final.s11_v2_item022_terminal_reconciliation_v1 import (
 def test_item022_terminal_reconciles_incident_without_new_outcome_work() -> None:
     if OUTPUT.exists():
         artifact = _load(OUTPUT)
-        assert artifact["decision"] == DECISION
-        assert _embedded_digest(artifact, "reconciliation_digest")
-        assert all(audit_frozen()["checks"].values())
+        assert historical_artifact_valid(
+            OUTPUT,
+            artifact,
+            digest_field="reconciliation_digest",
+            decision=DECISION,
+        )
+        successor = inspect_terminal_reconciliation()
+        assert all(successor["checks"].values())
         observed = artifact["observed"]
     else:
         evidence = inspect_terminal_reconciliation()

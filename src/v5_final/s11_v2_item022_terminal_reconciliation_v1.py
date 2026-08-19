@@ -19,7 +19,7 @@ from .historical_artifact_audit import (
 from .parent_native_persistent_runner import replay_raw_ledger
 from .s0_successor import ROOT
 from .s11_v2_execution_readiness_v4 import CAP_FREEZE, P7_V5
-from .s11_v2_execution_runner_v1 import _item_paths, _terminal_prefix
+from .s11_v2_execution_runner_v1 import _item_paths, _validate_terminal_receipt
 from .s11_v2_item022_same_item_retry_authorization_v1 import (
     OUTPUT as RETRY_AUTHORIZATION,
 )
@@ -157,12 +157,20 @@ def inspect_terminal_reconciliation() -> dict[str, Any]:
     predecessor_digests = tuple(
         readiness["accepted_predecessor_receipt_readiness_digests"]
     )
-    prefix = _terminal_prefix(
-        adapter=adapter,
-        production_root=PRODUCTION_ROOT,
-        readiness_digest=readiness["readiness_digest"],
-        predecessor_readiness_digests=predecessor_digests,
-    )
+    # This successor closes item022 only.  Validate the exact prefix that it
+    # froze, rather than asking the current runner to reinterpret later
+    # additive successors through the historical v6 readiness lineage.
+    prefix = []
+    for index, item in enumerate(adapter.queue["items"][: QUEUE_INDEX + 1]):
+        prefix_request = adapter.request(str(item["queue_item_id"]))
+        prefix.append(
+            _validate_terminal_receipt(
+                request=prefix_request,
+                paths=_item_paths(PRODUCTION_ROOT, index, prefix_request),
+                readiness_digest=readiness["readiness_digest"],
+                predecessor_readiness_digests=predecessor_digests,
+            )
+        )
     incident_evidence_unchanged = all(
         _sha(ROOT / path) == expected
         for path, expected in incident["bindings"]["evidence_sha256"].items()
