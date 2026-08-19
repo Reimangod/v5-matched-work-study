@@ -34,14 +34,22 @@ def _digest_without(record: dict[str, Any], field: str) -> str:
 
 
 def _run(arguments: list[str]) -> dict[str, Any]:
-    completed = subprocess.run(
-        arguments,
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        timeout=30,
-    )
+    try:
+        completed = subprocess.run(
+            arguments,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=30,
+        )
+    except FileNotFoundError as error:
+        return {
+            "arguments": arguments,
+            "returncode": 127,
+            "stdout": "",
+            "stderr": str(error),
+        }
     return {
         "arguments": arguments,
         "returncode": completed.returncode,

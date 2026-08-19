@@ -40,6 +40,17 @@ def test_gpu_row_parser_is_strict() -> None:
     ]
 
 
+def test_missing_optional_diagnostic_command_is_recorded(monkeypatch) -> None:
+    def missing(*args, **kwargs):
+        raise FileNotFoundError("nvcc not found")
+
+    monkeypatch.setattr(s1.subprocess, "run", missing)
+    result = s1._run(["nvcc", "--version"])
+    assert result["returncode"] == 127
+    assert result["stdout"] == ""
+    assert "nvcc not found" in result["stderr"]
+
+
 def test_capture_go_requires_exact_hardware_and_capacity(monkeypatch) -> None:
     monkeypatch.setattr(s1.platform, "system", lambda: "Linux")
     monkeypatch.setattr(s1.platform, "platform", lambda: "Linux-test")
