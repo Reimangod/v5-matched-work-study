@@ -152,6 +152,20 @@ ITEM023_TERMINAL_RECONCILIATION = (
     / "artifacts/v5-final/parent-native/s11-v2-item023-terminal-reconciliation-v1"
     / "terminal-reconciliation-v1.json"
 )
+ITEM028_INCIDENT = (
+    ROOT
+    / "artifacts/v5-final/parent-native/s11-v2-item028-incident-v1"
+    / "relation-work-precheck-incident-v1.json"
+)
+ITEM028_RETRY_AUTHORIZATION = (
+    ROOT
+    / "artifacts/v5-final/parent-native/s11-v2-item028-retry-authorization-v1"
+    / "same-item-retry-authorization-v1.json"
+)
+ITEM028_QUEUE_ID = (
+    "s11-v2-item-v2:"
+    "7809ff950f7654f1eb50b793f7c3ea5b31037fff3f7a4406b041e70bb2988121"
+)
 ADAPTER_SOURCE = ROOT / "src/v5_final/s11_v2_queue_native_adapter.py"
 KERNEL_SOURCE_PATHS = (
     ROOT / "src/v5_final/parent_native_development_execution_v1.py",
@@ -231,6 +245,8 @@ def _audit_retry_authorization(
         authorization_path = ITEM022_RETRY_AUTHORIZATION
     elif queue_item_id == ITEM023_QUEUE_ID:
         authorization_path = ITEM023_RETRY_AUTHORIZATION
+    elif queue_item_id == ITEM028_QUEUE_ID:
+        authorization_path = ITEM028_RETRY_AUTHORIZATION
     else:
         raise S11V2ExecutionRunnerError("retry is not authorized for this queue item")
     if not authorization_path.is_file():
@@ -238,6 +254,42 @@ def _audit_retry_authorization(
     artifact = _load(authorization_path)
     bindings = artifact.get("bindings", {})
     sources = bindings.get("source_sha256", {})
+    if queue_item_id == ITEM028_QUEUE_ID:
+        observed = artifact.get("observed", {})
+        if (
+            artifact.get("schema")
+            != "v5-final.s11-v2-item028-same-item-retry-authorization.v1"
+            or artifact.get("decision")
+            != "AUTHORIZE_S11_V2_ITEM028_SAME_ITEM_RELATION_WORK_RETRY"
+            or not _embedded_digest(artifact, "authorization_digest")
+            or not all(artifact.get("checks", {}).values())
+            or artifact.get("queue_index") != 28
+            or artifact.get("queue_item_id") != queue_item_id
+            or artifact.get("retry_attempt_ordinal") != 2
+            or artifact.get("scientific_change") is not False
+            or artifact.get("candidate_outcomes_used") is not False
+            or artifact.get("authorization", {}).get("item028_retry")
+            != "AUTHORIZED_ONCE_APPEND_ONLY_SAME_CAP_RELATION_WORK_RETRY"
+            or bindings.get("item028_incident_sha256") != _sha(ITEM028_INCIDENT)
+            or bindings.get("pre_retry_last_record_digest")
+            != raw_last_record_digest
+            or bindings.get("outcome_cap_digest")
+            != request.item["outcome_work_cap"]["cap_digest"]
+            or bindings.get("verifier_cap_digest")
+            != request.item["verifier_componentwise_cap_digest"]
+            or observed.get("corrected_sparse_expm_upper_bound") != 42
+            or observed.get("frozen_sparse_expm_cap") != 72
+            or observed.get("corrected_sparse_expm_upper_bound", 73)
+            > request.item["verifier_componentwise_cap"]["N_sparse_expm_multiply"]
+            or observed.get("expected_retry_boundary")
+            != "OUTCOME_FREE_VERIFIER_SESSION_WITHIN_UNCHANGED_CAP"
+            or not sources
+            or any(_sha(ROOT / path) != expected for path, expected in sources.items())
+        ):
+            raise S11V2ExecutionRunnerError(
+                "item028 retry authorization is invalid"
+            )
+        return artifact
     if queue_item_id in {ITEM022_QUEUE_ID, ITEM023_QUEUE_ID}:
         observed = artifact.get("observed", {})
         retry_index = 22 if queue_item_id == ITEM022_QUEUE_ID else 23
@@ -312,6 +364,8 @@ def _retry_authorization_path(artifact: Mapping[str, Any]) -> Path:
         return ITEM022_RETRY_AUTHORIZATION
     if schema == "v5-final.s11-v2-item023-same-item-retry-authorization.v1":
         return ITEM023_RETRY_AUTHORIZATION
+    if schema == "v5-final.s11-v2-item028-same-item-retry-authorization.v1":
+        return ITEM028_RETRY_AUTHORIZATION
     raise S11V2ExecutionRunnerError("retry authorization schema is unknown")
 
 
@@ -945,6 +999,8 @@ def _execute_authorized_item(
                         nonce=(
                             "s11-v2-item023-authorized-preverifier-retry-attempt-2"
                             if request.item["queue_item_id"] == ITEM023_QUEUE_ID
+                            else "s11-v2-item028-authorized-relation-work-retry-attempt-2"
+                            if request.item["queue_item_id"] == ITEM028_QUEUE_ID
                             else "s11-v2-item022-authorized-preverifier-retry-attempt-2"
                             if request.item["queue_item_id"] == ITEM022_QUEUE_ID
                             else "s11-v2-item002-authorized-retry-attempt-2"

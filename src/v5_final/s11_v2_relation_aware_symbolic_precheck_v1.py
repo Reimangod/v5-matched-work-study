@@ -48,6 +48,16 @@ class RelationSymbolicCostV1:
     rewrite_verifications: int
 
 
+@dataclass(frozen=True)
+class RelationVerifierWorkV1:
+    symbolic_check_cost: int
+    sparse_expm_per_probe: int
+    state_probe_vectors_per_probe: int
+    generator_materialization_upper_bound: int
+    circuit_operator_builds_per_probe: int
+    rewrite_verifications: int
+
+
 def _checked_nonnegative_int(value: Any, *, field: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         raise RelationAwareSymbolicPrecheckError(f"invalid {field}")
@@ -84,6 +94,27 @@ def symbolic_check_cost_from_arity(
     if cost > MAX_COUNTER:
         raise RelationAwareSymbolicPrecheckError("symbolic check cost overflow")
     return cost
+
+
+def relation_verifier_work_from_arity(
+    *, source_arity: int, target_arity: int, deletion_shortcut: bool
+) -> RelationVerifierWorkV1:
+    """Derive all relation-dependent Verifier V2 work without outcomes."""
+
+    symbolic = symbolic_check_cost_from_arity(
+        source_arity=source_arity,
+        target_arity=target_arity,
+        deletion_shortcut=deletion_shortcut,
+    )
+    numeric_arity = 0 if deletion_shortcut else source_arity + target_arity
+    return RelationVerifierWorkV1(
+        symbolic_check_cost=symbolic,
+        sparse_expm_per_probe=numeric_arity,
+        state_probe_vectors_per_probe=0 if deletion_shortcut else 1,
+        generator_materialization_upper_bound=numeric_arity,
+        circuit_operator_builds_per_probe=0 if deletion_shortcut else 1,
+        rewrite_verifications=1,
+    )
 
 
 def _normalized_jacobian(value: Any) -> tuple[tuple[float, ...], ...]:
@@ -184,23 +215,25 @@ def relation_symbolic_cost(candidate: Any) -> RelationSymbolicCostV1:
                 "nested relation slot dimensions differ from arity"
             )
     deletion = target == 0
-    numeric_arity = 0 if deletion else source + target
+    work = relation_verifier_work_from_arity(
+        source_arity=source,
+        target_arity=target,
+        deletion_shortcut=deletion,
+    )
     return RelationSymbolicCostV1(
         candidate_id=candidate_id,
         relation_kind=kind,
         source_arity=source,
         target_arity=target,
         deletion_shortcut=deletion,
-        symbolic_check_cost=symbolic_check_cost_from_arity(
-            source_arity=source,
-            target_arity=target,
-            deletion_shortcut=deletion,
+        symbolic_check_cost=work.symbolic_check_cost,
+        sparse_expm_per_probe=work.sparse_expm_per_probe,
+        state_probe_vectors_per_probe=work.state_probe_vectors_per_probe,
+        generator_materialization_upper_bound=(
+            work.generator_materialization_upper_bound
         ),
-        sparse_expm_per_probe=numeric_arity,
-        state_probe_vectors_per_probe=0 if deletion else 1,
-        generator_materialization_upper_bound=numeric_arity,
-        circuit_operator_builds_per_probe=0 if deletion else 1,
-        rewrite_verifications=1,
+        circuit_operator_builds_per_probe=work.circuit_operator_builds_per_probe,
+        rewrite_verifications=work.rewrite_verifications,
     )
 
 

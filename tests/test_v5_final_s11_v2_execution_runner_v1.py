@@ -287,6 +287,17 @@ def test_rolled_back_item_cannot_retry_without_additive_authorization(
     assert tuple(paths["raw"].iterdir()) == before
 
 
+def test_item028_retry_authorization_schema_maps_to_additive_artifact() -> None:
+    from v5_final import s11_v2_execution_runner_v1 as subject
+
+    artifact = {
+        "schema": "v5-final.s11-v2-item028-same-item-retry-authorization.v1"
+    }
+    assert subject._retry_authorization_path(artifact) == (
+        subject.ITEM028_RETRY_AUTHORIZATION
+    )
+
+
 def test_item022_retry_rejects_before_runtime_or_verifier(
     tmp_path, monkeypatch
 ) -> None:
