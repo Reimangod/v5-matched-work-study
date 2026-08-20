@@ -62,7 +62,7 @@ def test_public_entrypoint_refuses_absent_readiness_before_adapter_or_kernel(
         raise AssertionError("adapter must remain unreachable")
 
     monkeypatch.setattr(subject, "QueueV2NativeAdapter", adapter)
-    with pytest.raises(S11V2ExecutionRunnerError, match="readiness v10 GO is absent"):
+    with pytest.raises(S11V2ExecutionRunnerError, match="readiness v11 GO is absent"):
         execute_queue_item_v1("unused", production_root=tmp_path / "production")
     assert touched["adapter"] is False
 

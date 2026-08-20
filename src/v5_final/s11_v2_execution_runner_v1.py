@@ -61,10 +61,15 @@ DEFAULT_PRODUCTION_ROOT = (
 )
 READINESS_V2 = (
     ROOT
+    / "artifacts/v5-final/parent-native/s11-v2-execution-readiness-v11"
+    / "execution-readiness-go-v11.json"
+)
+READINESS_GO = "GO_S11_V2_FROZEN_QUEUE_CONTINUATION_FROM_INDEX_29"
+READINESS_V10 = (
+    ROOT
     / "artifacts/v5-final/parent-native/s11-v2-execution-readiness-v10"
     / "execution-readiness-go-v10.json"
 )
-READINESS_GO = "GO_S11_V2_ITEM028_SAME_ITEM_RETRY_ONLY"
 READINESS_V9 = (
     ROOT
     / "artifacts/v5-final/parent-native/s11-v2-execution-readiness-v9"
@@ -170,6 +175,11 @@ ITEM028_RETRY_AUTHORIZATION = (
 ITEM028_QUEUE_ID = (
     "s11-v2-item-v2:"
     "7809ff950f7654f1eb50b793f7c3ea5b31037fff3f7a4406b041e70bb2988121"
+)
+ITEM028_TERMINAL_RECONCILIATION = (
+    ROOT
+    / "artifacts/v5-final/parent-native/s11-v2-item028-terminal-reconciliation-v1"
+    / "terminal-reconciliation-v1.json"
 )
 ADAPTER_SOURCE = ROOT / "src/v5_final/s11_v2_queue_native_adapter.py"
 KERNEL_SOURCE_PATHS = (
@@ -1223,19 +1233,19 @@ def _execute_authorized_item(
 
 def _audit_readiness_v2() -> dict[str, Any]:
     if not READINESS_V2.is_file():
-        raise S11V2ExecutionRunnerError("execution-readiness v10 GO is absent")
+        raise S11V2ExecutionRunnerError("execution-readiness v11 GO is absent")
     artifact = _load(READINESS_V2)
-    readiness_v9 = _load(READINESS_V9)
+    readiness_v10 = _load(READINESS_V10)
     bindings = artifact.get("binding", {})
     sources = bindings.get("source_sha256", {})
     if (
-        artifact.get("schema") != "v5-final.s11-v2-execution-readiness.v10"
+        artifact.get("schema") != "v5-final.s11-v2-execution-readiness.v11"
         or artifact.get("decision") != READINESS_GO
         or not _embedded_digest(artifact, "readiness_digest")
         or not all(artifact.get("checks", {}).values())
         or artifact.get("blockers") != []
         or artifact.get("authorization", {}).get("S11_v2_execution")
-        != "AUTHORIZED_EXACT_ITEM028_SAME_ITEM_RETRY_ONLY"
+        != "AUTHORIZED_EXACT_FROZEN_QUEUE_FROM_INDEX_29_ONLY"
         or artifact.get("authorization", {}).get("FCI_reporting")
         != "NOT_AUTHORIZED_UNTIL_ALL_90_TERMINAL"
         or artifact.get("authorization", {}).get("performance_claim")
@@ -1246,15 +1256,15 @@ def _audit_readiness_v2() -> dict[str, Any]:
         or bindings.get("P7_v5", {}).get("sha256") != _sha(P7_V5)
         or bindings.get("environment", {}).get("sha256")
         != _sha(EXECUTION_ENVIRONMENT)
-        or bindings.get("readiness_v9", {}).get("sha256") != _sha(READINESS_V9)
-        or bindings.get("readiness_v9", {}).get("readiness_digest")
-        != readiness_v9["readiness_digest"]
-        or bindings.get("item028_retry_authorization", {}).get("sha256")
-        != _sha(ITEM028_RETRY_AUTHORIZATION)
-        or artifact.get("execution_start_index") != 28
+        or bindings.get("readiness_v10", {}).get("sha256") != _sha(READINESS_V10)
+        or bindings.get("readiness_v10", {}).get("readiness_digest")
+        != readiness_v10["readiness_digest"]
+        or bindings.get("item028_terminal_reconciliation", {}).get("sha256")
+        != _sha(ITEM028_TERMINAL_RECONCILIATION)
+        or artifact.get("execution_start_index") != 29
         or artifact.get("accepted_predecessor_receipt_readiness_digests")
-        != readiness_v9.get("accepted_predecessor_receipt_readiness_digests", [])
-        + [readiness_v9["readiness_digest"]]
+        != readiness_v10.get("accepted_predecessor_receipt_readiness_digests", [])
+        + [readiness_v10["readiness_digest"]]
         or not artifact.get("tests", {}).get("full_repository_suite", {}).get("passed")
         or not artifact.get("tests", {})
         .get("live_repository_checks", {})
@@ -1268,7 +1278,7 @@ def _audit_readiness_v2() -> dict[str, Any]:
         or not sources
         or any(_sha(ROOT / path) != expected for path, expected in sources.items())
     ):
-        raise S11V2ExecutionRunnerError("execution-readiness v10 is invalid")
+        raise S11V2ExecutionRunnerError("execution-readiness v11 is invalid")
     return artifact
 
 
