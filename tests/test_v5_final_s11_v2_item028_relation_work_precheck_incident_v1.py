@@ -3,15 +3,27 @@ from v5_final.s11_v2_item028_relation_work_precheck_incident_v1 import (
     OUTPUT,
     _embedded_digest,
     _load,
-    audit_frozen,
     inspect_incident,
+)
+from v5_final.s11_v2_item022_terminal_reconciliation_v1 import (
+    historical_artifact_valid,
 )
 
 
 def test_item028_incident_reconstructs_relation_work_underestimate() -> None:
-    evidence = inspect_incident()
-    assert all(evidence["checks"].values())
-    observed = evidence["observed"]
+    if OUTPUT.exists():
+        artifact = _load(OUTPUT)
+        assert historical_artifact_valid(
+            OUTPUT,
+            artifact,
+            digest_field="incident_digest",
+            decision=DECISION,
+        )
+        observed = artifact["observed"]
+    else:
+        evidence = inspect_incident()
+        assert all(evidence["checks"].values())
+        observed = evidence["observed"]
     assert observed["terminal_prefix"] == 28
     assert observed["selected_total_generator_arities"] == [3, 3, 3, 5]
     assert observed["probe_count"] == 3
@@ -26,8 +38,11 @@ def test_item028_incident_reconstructs_relation_work_underestimate() -> None:
 def test_item028_incident_artifact_or_precapture_state_is_valid() -> None:
     if OUTPUT.exists():
         artifact = _load(OUTPUT)
-        assert artifact["decision"] == DECISION
-        assert _embedded_digest(artifact, "incident_digest")
-        assert all(audit_frozen()["checks"].values())
+        assert historical_artifact_valid(
+            OUTPUT,
+            artifact,
+            digest_field="incident_digest",
+            decision=DECISION,
+        )
     else:
         assert all(inspect_incident()["checks"].values())

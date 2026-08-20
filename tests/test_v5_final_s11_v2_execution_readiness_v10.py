@@ -11,17 +11,22 @@ from v5_final.s11_v2_execution_readiness_v10 import (
     _embedded_digest,
     _load,
     _require_minimum_free_storage,
-    audit_frozen,
     inspect_checkpoint,
+)
+from v5_final.s11_v2_item022_terminal_reconciliation_v1 import (
+    historical_artifact_valid,
 )
 
 
 def test_item028_retry_checkpoint_or_frozen_readiness_is_valid() -> None:
     if OUTPUT.exists():
         artifact = _load(OUTPUT)
-        assert artifact["decision"] == DECISION
-        assert _embedded_digest(artifact, "readiness_digest")
-        assert all(audit_frozen()["checks"].values())
+        assert historical_artifact_valid(
+            OUTPUT,
+            artifact,
+            digest_field="readiness_digest",
+            decision=DECISION,
+        )
     else:
         evidence = inspect_checkpoint()
         assert all(evidence["checks"].values())

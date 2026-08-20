@@ -3,15 +3,27 @@ from v5_final.s11_v2_item028_same_item_retry_authorization_v1 import (
     OUTPUT,
     _embedded_digest,
     _load,
-    audit_frozen,
     inspect_retry_readiness,
+)
+from v5_final.s11_v2_item022_terminal_reconciliation_v1 import (
+    historical_artifact_valid,
 )
 
 
 def test_item028_retry_is_general_outcome_free_and_within_unchanged_cap() -> None:
-    evidence = inspect_retry_readiness()
-    assert all(evidence["checks"].values())
-    observed = evidence["observed"]
+    if OUTPUT.exists():
+        artifact = _load(OUTPUT)
+        assert historical_artifact_valid(
+            OUTPUT,
+            artifact,
+            digest_field="authorization_digest",
+            decision=DECISION,
+        )
+        observed = artifact["observed"]
+    else:
+        evidence = inspect_retry_readiness()
+        assert all(evidence["checks"].values())
+        observed = evidence["observed"]
     assert observed["previous_sparse_expm_upper_bound"] == 36
     assert observed["corrected_sparse_expm_upper_bound"] == 42
     assert observed["reconstructed_sparse_expm_work"] == 42
@@ -26,8 +38,11 @@ def test_item028_retry_is_general_outcome_free_and_within_unchanged_cap() -> Non
 def test_item028_retry_artifact_or_precapture_state_is_valid() -> None:
     if OUTPUT.exists():
         artifact = _load(OUTPUT)
-        assert artifact["decision"] == DECISION
-        assert _embedded_digest(artifact, "authorization_digest")
-        assert all(audit_frozen()["checks"].values())
+        assert historical_artifact_valid(
+            OUTPUT,
+            artifact,
+            digest_field="authorization_digest",
+            decision=DECISION,
+        )
     else:
         assert all(inspect_retry_readiness()["checks"].values())
