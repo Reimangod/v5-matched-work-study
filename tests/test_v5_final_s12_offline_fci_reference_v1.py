@@ -31,10 +31,20 @@ def test_readiness_freezes_solver_code_cases_and_firewalls() -> None:
     assert readiness["execution_contract"]["FCI_evaluations"] == 5
     assert readiness["execution_contract"]["candidate_energy"] == "NOT_AUTHORIZED"
     assert readiness["execution_contract"]["S11_rerun"] == "NOT_AUTHORIZED"
+    assert readiness["supersession"]["scientific_semantics_changed"] is False
+    assert readiness["supersession"]["FCI_evaluations_before_successor"] == 0
     assert set(readiness["bindings"]["source_sha256"]) == {
         "src/v5_final/s12_offline_fci_reference_v1.py",
         "tests/test_v5_final_s12_offline_fci_reference_v1.py",
     }
+
+
+def test_git_output_preserves_clean_submodule_marker() -> None:
+    from v5_final.s12_offline_fci_reference_v1 import _git
+
+    lines = _git("submodule", "status", "--recursive").splitlines()
+    assert lines
+    assert all(line.startswith(" ") for line in lines)
 
 
 def test_readiness_digest_rejects_tamper() -> None:

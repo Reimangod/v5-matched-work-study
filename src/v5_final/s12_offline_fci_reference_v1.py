@@ -33,7 +33,8 @@ SOURCE_CATALOG = (
     / "development-source-catalog-v1.json"
 )
 OUTPUT_DIR = ROOT / "artifacts/v5-final/parent-native/s12-offline-fci-reference-v1"
-READINESS = OUTPUT_DIR / "offline-fci-execution-readiness-v1.json"
+READINESS_V1 = OUTPUT_DIR / "offline-fci-execution-readiness-v1.json"
+READINESS = OUTPUT_DIR / "offline-fci-execution-readiness-v2.json"
 RESULT = OUTPUT_DIR / "offline-fci-reference-result-v1.json"
 SOURCE_PATHS = (
     "src/v5_final/s12_offline_fci_reference_v1.py",
@@ -73,7 +74,7 @@ def _git(*args: str) -> str:
     return subprocess.run(
         ["git", *args], cwd=ROOT, check=True, text=True,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-    ).stdout.strip()
+    ).stdout.rstrip("\r\n")
 
 
 def _package_versions() -> dict[str, str]:
@@ -119,9 +120,20 @@ def build_readiness(base_head: str) -> dict[str, Any]:
     if gate_audit["decision"] != "GO_S12_OFFLINE_FCI_REPORTING_EXACT_FROZEN_CASES_ONLY":
         raise S12OfflineFCIReferenceV1Error("S12 reporting gate is not GO")
     artifact: dict[str, Any] = {
-        "schema": "v5-final.s12-offline-fci-execution-readiness.v1",
+        "schema": "v5-final.s12-offline-fci-execution-readiness.v2",
         "decision": READINESS_DECISION,
         "base_head": base_head,
+        "supersession": {
+            "predecessor_path": str(READINESS_V1.relative_to(ROOT)),
+            "predecessor_sha256": _sha(READINESS_V1),
+            "predecessor_readiness_digest": _load(READINESS_V1)["readiness_digest"],
+            "reason": (
+                "v1 live audit removed the leading clean-submodule marker while "
+                "normalizing git stdout; v2 preserves Git status semantics"
+            ),
+            "scientific_semantics_changed": False,
+            "FCI_evaluations_before_successor": 0,
+        },
         "bindings": {
             "S12_gate_digest": gate["gate_digest"],
             "S12_gate_sha256": _sha(S12_GATE),
@@ -176,7 +188,7 @@ def audit_readiness(*, live: bool, require_result_absent: bool) -> dict[str, Any
     expected = build_readiness(str(artifact.get("base_head")))
     checks = {
         "schema_decision_exact": artifact.get("schema")
-        == "v5-final.s12-offline-fci-execution-readiness.v1"
+        == "v5-final.s12-offline-fci-execution-readiness.v2"
         and artifact.get("decision") == READINESS_DECISION,
         "readiness_digest_valid": _embedded_digest(artifact, "readiness_digest"),
         "frozen_bindings_current": artifact == expected,
