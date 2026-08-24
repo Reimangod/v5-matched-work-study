@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import subprocess
+import time
 from typing import Any
 
 from v5_matched_work.atomic_artifacts import canonical_json_bytes, write_json_exclusive
@@ -22,6 +23,9 @@ SENSITIVE_PATTERNS = (
     "sk-[A-Za-z0-9]{20,}",
     "AKIA[0-9A-Z]{16}",
 )
+VISIBILITY_MAX_ATTEMPTS = 4
+VISIBILITY_TIMEOUT_SECONDS = 30
+VISIBILITY_BACKOFF_SECONDS = (1, 2, 4)
 
 
 def _digest_without(value: dict[str, Any], field: str) -> str:
@@ -37,18 +41,56 @@ def _git(*arguments: str) -> str:
 
 
 def _visibility() -> dict[str, Any]:
-    return json.loads(
-        subprocess.check_output(
-            [
-                "gh",
-                "repo",
-                "view",
-                REPOSITORY,
-                "--json",
-                "visibility,isPrivate,url,defaultBranchRef",
-            ],
-            text=True,
-        )
+    command = [
+        "gh",
+        "repo",
+        "view",
+        REPOSITORY,
+        "--json",
+        "visibility,isPrivate,url,defaultBranchRef",
+    ]
+    failures: list[dict[str, Any]] = []
+    for attempt in range(1, VISIBILITY_MAX_ATTEMPTS + 1):
+        started_at_unix_ns = time.time_ns()
+        try:
+            process = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=VISIBILITY_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired as error:
+            failures.append(
+                {
+                    "attempt": attempt,
+                    "request_type": "GH_REPO_VIEW_VISIBILITY",
+                    "started_at_unix_ns": started_at_unix_ns,
+                    "failure_class": "TIMEOUT",
+                    "timeout_seconds": VISIBILITY_TIMEOUT_SECONDS,
+                    "http_status": None,
+                    "stderr": str(error),
+                }
+            )
+        else:
+            if process.returncode == 0:
+                return json.loads(process.stdout)
+            failures.append(
+                {
+                    "attempt": attempt,
+                    "request_type": "GH_REPO_VIEW_VISIBILITY",
+                    "started_at_unix_ns": started_at_unix_ns,
+                    "failure_class": "GH_CLI_NONZERO",
+                    "exit_code": process.returncode,
+                    "http_status": None,
+                    "stderr": process.stderr.strip(),
+                }
+            )
+        if attempt < VISIBILITY_MAX_ATTEMPTS:
+            time.sleep(VISIBILITY_BACKOFF_SECONDS[attempt - 1])
+    raise RuntimeError(
+        "bounded GitHub visibility audit failed: "
+        + json.dumps(failures, sort_keys=True)
     )
 
 
