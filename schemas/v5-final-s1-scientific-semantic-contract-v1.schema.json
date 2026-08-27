@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Reimangod/v5-matched-work-study/schemas/v5-final-s1-scientific-semantic-contract-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "protocol_id", "stage", "status", "scientific_value_states",
+    "legacy_zero_mapping", "delta_partitions", "terminal_evidence",
+    "terminal_semantics", "academic_integrity", "systems_safety",
+    "authorization", "claim_boundary", "decision", "contract_digest"
+  ],
+  "properties": {
+    "schema": {"const": "v5-final.s1-scientific-semantic-contract.v1"},
+    "protocol_id": {"const": "sequential-rebuilding-v1"},
+    "stage": {"const": "S1"},
+    "status": {"const": "COMPLETE"},
+    "scientific_value_states": {
+      "type": "array",
+      "minItems": 5,
+      "uniqueItems": true,
+      "contains": {"const": "AVAILABLE"}
+    },
+    "legacy_zero_mapping": {
+      "type": "object",
+      "required": ["quantity", "unit", "state", "value", "reason"],
+      "properties": {
+        "state": {"const": "LEGACY_SENTINEL_NOT_EVALUATED"},
+        "value": {"type": "null"}
+      }
+    },
+    "delta_partitions": {
+      "type": "object",
+      "required": ["state_delta", "resource_delta", "scientific_value_delta", "work_delta"],
+      "properties": {
+        "state_delta": {"type": "string", "minLength": 1},
+        "resource_delta": {"type": "string", "minLength": 1},
+        "scientific_value_delta": {"type": "string", "minLength": 1},
+        "work_delta": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "terminal_evidence": {
+      "type": "object",
+      "required": ["EXECUTED", "DEDUPLICATED", "STRUCTURALLY_REJECTED", "BUDGET_REJECTED", "FAILED", "CANCELLED"],
+      "properties": {
+        "EXECUTED": {"type": "array", "minItems": 1, "uniqueItems": true},
+        "DEDUPLICATED": {"type": "array", "minItems": 1, "uniqueItems": true},
+        "STRUCTURALLY_REJECTED": {"type": "array", "minItems": 1, "uniqueItems": true},
+        "BUDGET_REJECTED": {"type": "array", "minItems": 1, "uniqueItems": true},
+        "FAILED": {"type": "array", "minItems": 1, "uniqueItems": true},
+        "CANCELLED": {"type": "array", "minItems": 1, "uniqueItems": true}
+      },
+      "additionalProperties": false
+    },
+    "terminal_semantics": {"type": "object"},
+    "academic_integrity": {"type": "object"},
+    "systems_safety": {"type": "object"},
+    "authorization": {
+      "type": "object",
+      "required": ["next_stage", "performance_experiment", "candidate_molecular_energy_evaluation", "s5_freeze"],
+      "properties": {
+        "next_stage": {"const": "S2"},
+        "performance_experiment": {"const": "NOT_AUTHORIZED"},
+        "candidate_molecular_energy_evaluation": {"const": "NOT_AUTHORIZED"},
+        "s5_freeze": {"const": "NOT_AUTHORIZED"}
+      }
+    },
+    "claim_boundary": {"type": "string", "minLength": 1},
+    "decision": {"const": "GO_S2_ONLY"},
+    "contract_digest": {"pattern": "^[0-9a-f]{64}$"}
+  }
+}
