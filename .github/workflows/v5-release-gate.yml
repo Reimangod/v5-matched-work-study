@@ -14,7 +14,10 @@ jobs:
   release-gate:
     name: release-gate
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    # The exact frozen-contract suite requires about 170 minutes on the
+    # reference workload.  Keep the complete suite intact and give it a
+    # bounded window that can actually finish.
+    timeout-minutes: 240
     env:
       GH_TOKEN: ${{ github.token }}
       EXACT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
