@@ -47,6 +47,7 @@ from .p0_baseline import (
     REFERENCE,
     _select_item,
 )
+from .sparse_hamiltonian_bundle import MANIFEST_V2
 
 
 TRANSFER_MANIFEST = (
@@ -148,6 +149,27 @@ def _algorithm_from_transfer(alias: str, case_id: str) -> tuple[Any, Any]:
         rand_degenerate=False,
         shots=None,
     )
+    sparse_manifest = load_json(MANIFEST_V2)
+    if not embedded_digest_valid(sparse_manifest, "bundle_digest"):
+        raise A100PilotError("P2 sparse Hamiltonian transfer digest is invalid")
+    matrix_matches = [
+        value for value in sparse_manifest["cases"] if value["alias"] == alias
+    ]
+    if len(matrix_matches) != 1:
+        raise A100PilotError("P2 sparse Hamiltonian transfer case is not unique")
+    matrix_record = matrix_matches[0]
+    matrix_path = (
+        ARTIFACT_ROOT.parent.parent / str(matrix_record["path"])
+    ).resolve()
+    if sha256_file(matrix_path) != matrix_record["sha256"]:
+        raise A100PilotError("P2 sparse Hamiltonian transfer SHA-256 differs")
+    from scipy import sparse
+
+    transferred_hamiltonian = sparse.load_npz(matrix_path).tocsc()
+    if [int(value) for value in transferred_hamiltonian.shape] != matrix_record["shape"]:
+        raise A100PilotError("P2 sparse Hamiltonian transfer shape differs")
+    algorithm.hamiltonian = transferred_hamiltonian
+    algorithm.energy_meas = algorithm.observable_to_measurement(transferred_hamiltonian)
     return algorithm, pool
 
 

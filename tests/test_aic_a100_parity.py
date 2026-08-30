@@ -63,3 +63,22 @@ def test_integral_transfer_is_outcome_free_and_matches_all_p0_digests():
     expected = {case["alias"]: case["Hamiltonian_digest"] for case in reference["cases"]}
     assert {case["alias"]: case["Hamiltonian_digest"] for case in transfer["cases"]} == expected
     assert all(case["FCI_energy"] is None and case["CCSD_energy"] is None for case in transfer["cases"])
+
+
+def test_sparse_transfer_v2_is_additive_and_preserves_p0_digests():
+    v1 = load_json(
+        ROOT
+        / "artifacts/aic-a100-pilot-v1/p2-source-transfer/"
+        "outcome-free-molecular-integral-bundle-v1.json"
+    )
+    v2 = load_json(
+        ROOT
+        / "artifacts/aic-a100-pilot-v1/p2-source-transfer-v2/"
+        "exact-sparse-hamiltonian-bundle-v2.json"
+    )
+    assert embedded_digest_valid(v2, "bundle_digest")
+    assert v2["supersedes_without_mutation"]["v1_bundle_digest"] == v1["bundle_digest"]
+    assert v2["supersedes_without_mutation"]["v1_remains_immutable"] is True
+    assert {case["alias"]: case["Hamiltonian_digest"] for case in v2["cases"]} == {
+        case["alias"]: case["Hamiltonian_digest"] for case in v1["cases"]
+    }
