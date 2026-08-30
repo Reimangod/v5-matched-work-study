@@ -12,6 +12,7 @@ from .p0_baseline import PROTOCOL, REFERENCE
 
 P1 = ARTIFACT_ROOT / "p1-aic-preflight"
 PREFLIGHT = P1 / "aic-preflight-operational-no-go-v1.json"
+PREFLIGHT_RECOVERY = P1 / "aic-preflight-recovery-v2.json"
 
 
 def operational_no_go_body() -> dict[str, Any]:
@@ -168,13 +169,123 @@ def publish_operational_no_go() -> dict[str, Any]:
     return publish(PREFLIGHT, operational_no_go_body(), "preflight_digest")
 
 
+def preflight_recovery_body() -> dict[str, Any]:
+    """Record an additive successor after diagnosing the original P1 No-Go.
+
+    The original No-Go remains valid for its observation window.  This record
+    does not rewrite it; it binds the old evidence and documents the later,
+    reproducible allocation route on the active ``gpu-standard`` partition.
+    """
+
+    protocol = load_json(PROTOCOL)
+    reference = load_json(REFERENCE)
+    prior = load_json(PREFLIGHT)
+    if not embedded_digest_valid(protocol, "protocol_digest"):
+        raise RuntimeError("P0 protocol digest is invalid")
+    if not embedded_digest_valid(reference, "reference_digest"):
+        raise RuntimeError("P0 reference digest is invalid")
+    if not embedded_digest_valid(prior, "preflight_digest"):
+        raise RuntimeError("P1 v1 preflight digest is invalid")
+    if prior["status"] != "NO_GO_A100_OPERATIONAL_INSTABILITY":
+        raise RuntimeError("P1 v1 is not the expected operational No-Go")
+    return {
+        "schema": "aic-a100-pilot.p1-preflight-recovery.v2",
+        "status": "GO_P2_PINNED_GPU_ENVIRONMENT",
+        "phase": "P1_AIC_PREFLIGHT_ADDITIVE_RECOVERY",
+        "observation_date_jst": "2026-08-30",
+        "supersedes_without_mutation": {
+            "path": PREFLIGHT.relative_to(ARTIFACT_ROOT.parent.parent).as_posix(),
+            "preflight_digest": prior["preflight_digest"],
+            "historical_no_go_remains_valid_for_original_window": True,
+        },
+        "evidence_binding": {
+            "P0_protocol_digest": protocol["protocol_digest"],
+            "P0_reference_digest": reference["reference_digest"],
+        },
+        "diagnosis": {
+            "root_cause_class": "CROSS_PARTITION_SCHEDULING_WITHOUT_BACKFILL_ON_SHARED_DGX",
+            "evidence": [
+                "A CPU-only gpu-short probe remained pending while gpu-standard was active.",
+                "A CPU-only gpu-standard probe started and completed immediately.",
+                "A one-GPU gpu-standard probe then started and completed immediately.",
+            ],
+            "interpretation_boundary": (
+                "This is an empirical diagnosis of the audited cluster state, not a "
+                "general claim about Slurm or future AIC scheduling policy."
+            ),
+        },
+        "scheduler_evidence": {
+            "association_qos": "normal",
+            "qos_max_gpu_per_user": 2,
+            "requested_gpu_count": 1,
+            "jobs": [
+                {"id": 1954, "partition": "gpu-short", "gpu": 0, "state": "CANCELLED_BEFORE_START"},
+                {"id": 1955, "partition": "gpu-standard", "gpu": 0, "state": "COMPLETED"},
+                {"id": 1956, "partition": "gpu-standard", "gpu": 1, "state": "COMPLETED"},
+                {"id": 1957, "partition": "gpu-standard", "gpu": 1, "state": "COMPLETED"},
+            ],
+            "active_user_jobs_after_probe": 0,
+        },
+        "allocated_device": {
+            "node_class": "dgx-a100",
+            "model": "NVIDIA A100-SXM4-80GB",
+            "driver_version": "570.195.03",
+            "nvidia_smi_cuda_version": "12.8",
+            "slurm_alloc_tres_gpu": 1,
+            "CUDA_VISIBLE_DEVICES_count": 1,
+            "cuda_driver_device_count": 1,
+            "nvidia_smi_management_visible_count": 3,
+            "scope_explanation": (
+                "nvidia-smi exposed node-management devices, whereas the CUDA driver "
+                "inside the cgroup exposed exactly the single allocated device."
+            ),
+        },
+        "transport": {
+            "username_persisted_in_repository_artifact": False,
+            "private_key_material_persisted": False,
+            "credential_material_persisted": False,
+        },
+        "route_counters": {
+            "N_gpu_statevector": 0,
+            "N_gpu_energy": 0,
+            "N_gpu_gradient_component": 0,
+            "N_cpu_statevector": 0,
+            "N_cpu_energy": 0,
+            "N_cpu_gradient_component": 0,
+            "N_cpu_fallback": 0,
+        },
+        "successor_authorization": {
+            "P2_GPU_ENVIRONMENT_AND_SMOKE": "AUTHORIZED",
+            "P3_SCIENTIFIC_PARITY": "NOT_AUTHORIZED_PENDING_P2",
+            "P4_SAME_NODE_BENCHMARK": "NOT_AUTHORIZED_PENDING_P3",
+            "P5_LIMITED_SCIENTIFIC_PILOT": "NOT_AUTHORIZED_PENDING_P4",
+        },
+        "scientific_boundaries": {
+            "candidate_molecular_energy_evaluations": 0,
+            "optimizer_runs": 0,
+            "FCI_evaluations": 0,
+            "performance_claim_authorized": False,
+        },
+    }
+
+
+def publish_preflight_recovery() -> dict[str, Any]:
+    return publish(PREFLIGHT_RECOVERY, preflight_recovery_body(), "recovery_digest")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--publish-operational-no-go", action="store_true")
+    parser.add_argument("--publish-recovery-v2", action="store_true")
     arguments = parser.parse_args()
-    if not arguments.publish_operational_no_go:
-        raise RuntimeError("select --publish-operational-no-go")
-    print(json.dumps(publish_operational_no_go(), indent=2, sort_keys=True))
+    if arguments.publish_operational_no_go == arguments.publish_recovery_v2:
+        raise RuntimeError("select exactly one publication action")
+    value = (
+        publish_operational_no_go()
+        if arguments.publish_operational_no_go
+        else publish_preflight_recovery()
+    )
+    print(json.dumps(value, indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":
