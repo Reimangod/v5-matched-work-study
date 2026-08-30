@@ -325,11 +325,17 @@ def run_case(alias: str) -> dict[str, Any]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--case", choices=list(CASE_SPECS), required=True)
-    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--output", type=Path)
     arguments = parser.parse_args()
+    output = arguments.output
+    if output is None:
+        raw_output = os.environ.get("A100_PARITY_OUTPUT")
+        if not raw_output:
+            raise RuntimeError("set --output or A100_PARITY_OUTPUT")
+        output = Path(raw_output)
     result = run_case(arguments.case)
-    arguments.output.parent.mkdir(parents=True, exist_ok=True)
-    arguments.output.write_text(
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
         json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
     print(json.dumps(result, sort_keys=True))

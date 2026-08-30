@@ -24,8 +24,10 @@ export OMP_NUM_THREADS="${frozen_threads}"
 export MKL_NUM_THREADS="${frozen_threads}"
 export OPENBLAS_NUM_THREADS="${frozen_threads}"
 output="${root}/p3/${A100_CASE}.json"
+mkdir -p "$(dirname "${output}")"
+export A100_PARITY_OUTPUT="${output}"
 
 cd "${repo}"
 test "$(git rev-parse HEAD)" = "${A100_EXPECTED_HEAD}"
 "${root}/gpu-venv/bin/python" -m aic_a100_pilot.parity \
-  --case "${A100_CASE}" --output "${output}"
+  --case "${A100_CASE}"
