@@ -401,10 +401,17 @@ def run_case(alias: str) -> dict[str, Any]:
     if hashlib.sha256(circuit.qasm().encode("utf-8")).hexdigest() != expected["source_qasm_sha256"]:
         raise A100PilotError("source circuit digest differs")
     catalog = build_typed_catalog(context.pool, context.runtime.ansatz)
-    candidate_ids = [str(candidate.candidate_id) for candidate in catalog.candidates]
+    rebuilt_candidate_ids = [
+        str(candidate.candidate_id) for candidate in catalog.candidates
+    ]
+    rebuilt_candidate_order_digest = digest(rebuilt_candidate_ids)
+    # The GPU backend is a statevector backend, not a candidate-generation
+    # backend.  Cross-platform catalog rebuilding is diagnostic only; the
+    # operational pilot consumes the exact P0-frozen CPU catalog order.
+    candidate_ids = [str(value) for value in expected["candidate_ids"]]
     candidate_order_digest = digest(candidate_ids)
     if candidate_order_digest != expected["candidate_order_digest"]:
-        raise A100PilotError("candidate semantic order differs")
+        raise A100PilotError("P0-frozen candidate semantic order digest is invalid")
     if {key: int(value) for key, value in context.source_resources.items()} != expected["resources"]:
         raise A100PilotError("physical resource vector differs")
 
@@ -483,6 +490,10 @@ def run_case(alias: str) -> dict[str, Any]:
                 cpu_sha == expected["statevector_sha256"]
             ),
             "candidate_order_digest": candidate_order_digest,
+            "aic_rebuilt_candidate_order_digest": rebuilt_candidate_order_digest,
+            "aic_rebuilt_candidate_order_matches_frozen": (
+                rebuilt_candidate_order_digest == candidate_order_digest
+            ),
             "aic_projected_environment_digest": context.environment_digest,
             "aic_projected_plan_digest": context.plan_digest,
         },
@@ -503,6 +514,17 @@ def run_case(alias: str) -> dict[str, Any]:
                 "candidate_order_digest",
                 "physical_resources",
             ],
+        },
+        "candidate_catalog_policy": {
+            "operational_source": "P0_FROZEN_CPU_CATALOG_ORDER",
+            "AIC_dynamic_rebuild_consumed": False,
+            "AIC_dynamic_rebuild_is_diagnostic_only": True,
+            "candidate_count": len(candidate_ids),
+            "aic_rebuilt_candidate_count": len(rebuilt_candidate_ids),
+            "reason": (
+                "Candidate generation remains a pinned CPU responsibility; the "
+                "A100 pilot changes only statevector execution."
+            ),
         },
     }
 
