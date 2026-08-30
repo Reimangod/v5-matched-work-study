@@ -27,13 +27,17 @@ CONTRACT_V2 = (
     ARTIFACT_ROOT
     / "p3-unified-route-v2/unified-route-trajectory-contract-v2.json"
 )
-CONTRACT = (
+CONTRACT_V3 = (
     ARTIFACT_ROOT
     / "p3-unified-route-v3/unified-route-trajectory-contract-v3.json"
 )
-V2_PREOUTCOME_INCIDENT = (
+CONTRACT = (
     ARTIFACT_ROOT
-    / "p3-unified-route-v2/runtime-metadata-incident-job2004-v1.json"
+    / "p3-unified-route-v4/unified-route-trajectory-contract-v4.json"
+)
+V3_PREOUTCOME_INCIDENT = (
+    ARTIFACT_ROOT
+    / "p3-unified-route-v3/thread-preflight-incident-job2005-v1.json"
 )
 HYBRID_REPORT = (
     ARTIFACT_ROOT
@@ -44,6 +48,7 @@ TERMINAL_NO_GO = (
 )
 SOURCE_PATHS = (
     ROOT / "src/aic_a100_pilot/unified_route.py",
+    ROOT / "src/aic_a100_pilot/unified_route_prepare.py",
     ROOT / "scripts/aic/a100_unified_trajectory.sbatch",
 )
 
@@ -79,23 +84,22 @@ def contract_body() -> dict[str, Any]:
         raise RuntimeError(f"unified-route implementation is incomplete: {missing}")
     tolerances = protocol["tolerances"]
     return {
-        "schema": "aic-a100-pilot.unified-route-trajectory-contract.v3",
+        "schema": "aic-a100-pilot.unified-route-trajectory-contract.v4",
         "status": "GO_BOUNDED_UNIFIED_ROUTE_TRAJECTORY_PARITY",
         "frozen_before_new_unified_route_candidate_outcomes": True,
         "pre_outcome_correction": {
             "superseded_contract": _binding(
-                CONTRACT_V2, embedded_field="contract_digest"
+                CONTRACT_V3, embedded_field="contract_digest"
             ),
             "predecessor_incident": _binding(
-                V2_PREOUTCOME_INCIDENT, embedded_field="incident_digest"
+                V3_PREOUTCOME_INCIDENT, embedded_field="incident_digest"
             ),
-            "new_unified_route_candidate_outcomes_before_v3_freeze": 0,
+            "new_unified_route_candidate_outcomes_before_v4_freeze": 0,
             "reason": (
-                "v2 requested a distribution named qiskit although the pinned AIC "
-                "environment exposes the importable version under qiskit-terra or "
-                "module metadata"
+                "H2 historical source reconstruction requires two process threads, "
+                "which must be separated from the one-thread numerical parity route"
             ),
-            "v1_and_v2_remain_immutable": True,
+            "v1_v2_v3_remain_immutable": True,
         },
         "immutable_predecessor_no_go": {
             "preserved_without_mutation": True,
@@ -147,7 +151,20 @@ def contract_body() -> dict[str, Any]:
             "aer_max_parallel_experiments": 1,
             "aer_max_parallel_shots": 1,
             "aer_seed_simulator": 0,
-            "BLAS_and_OpenMP_threads": 1,
+            "source_reconstruction_thread_environment": {
+                "h2": 2,
+                "h4": 1,
+                "lih": 1,
+                "h6": 1,
+                "beh2": 1
+            },
+            "source_reconstruction_is_outcome_free": True,
+            "source_and_numerical_processes_are_separate": True,
+            "numerical_process_thread_environment": 1,
+            "prepared_bundle_validation": (
+                "exclusive pickle plus canonical manifest, exact SHA-256, contract, "
+                "Git HEAD, candidate IDs, and zero-outcome declaration"
+            ),
             "CPU_fallback_allowed": False,
             "runtime_source_hash_validation": "REQUIRED_BEFORE_CASE_PREPARATION",
             "result_runtime_identity": (

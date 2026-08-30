@@ -27,10 +27,11 @@ from aic_a100_pilot.unified_route_contract import (
     CONTRACT,
     CONTRACT_V1,
     CONTRACT_V2,
+    CONTRACT_V3,
     HYBRID_REPORT,
     SOURCE_PATHS,
     TERMINAL_NO_GO,
-    V2_PREOUTCOME_INCIDENT,
+    V3_PREOUTCOME_INCIDENT,
     contract_body,
 )
 
@@ -47,6 +48,9 @@ EXPECTED_UNIFIED_V1_SHA256 = (
 EXPECTED_UNIFIED_V2_SHA256 = (
     "7fd8a8e160e59d6c6eb6b40007b2b4b9f370249ab8e4cc7287d4a48bef6e6037"
 )
+EXPECTED_UNIFIED_V3_SHA256 = (
+    "9bd572614af0f9415894fb0a642963803c90d0bb5365fcec2736875a8322b8d6"
+)
 
 
 def _float_hex(value: float) -> str:
@@ -55,7 +59,7 @@ def _float_hex(value: float) -> str:
 
 def test_unified_contract_preserves_no_go_and_freezes_one_route():
     value = contract_body()
-    assert value["schema"].endswith(".v3")
+    assert value["schema"].endswith(".v4")
     assert value["status"] == "GO_BOUNDED_UNIFIED_ROUTE_TRAJECTORY_PARITY"
     assert value["frozen_before_new_unified_route_candidate_outcomes"] is True
     assert sha256_file(HYBRID_REPORT) == EXPECTED_HYBRID_REPORT_SHA256
@@ -69,13 +73,14 @@ def test_unified_contract_preserves_no_go_and_freezes_one_route():
     correction = value["pre_outcome_correction"]
     assert sha256_file(CONTRACT_V1) == EXPECTED_UNIFIED_V1_SHA256
     assert sha256_file(CONTRACT_V2) == EXPECTED_UNIFIED_V2_SHA256
-    assert correction["superseded_contract"]["sha256"] == EXPECTED_UNIFIED_V2_SHA256
-    assert correction["new_unified_route_candidate_outcomes_before_v3_freeze"] == 0
-    assert correction["v1_and_v2_remain_immutable"] is True
-    incident = load_json(V2_PREOUTCOME_INCIDENT)
+    assert sha256_file(CONTRACT_V3) == EXPECTED_UNIFIED_V3_SHA256
+    assert correction["superseded_contract"]["sha256"] == EXPECTED_UNIFIED_V3_SHA256
+    assert correction["new_unified_route_candidate_outcomes_before_v4_freeze"] == 0
+    assert correction["v1_v2_v3_remain_immutable"] is True
+    incident = load_json(V3_PREOUTCOME_INCIDENT)
     assert embedded_digest_valid(incident, "incident_digest")
     assert incident["status"] == (
-        "PRE_OUTCOME_ENGINEERING_INCIDENT_QISKIT_METADATA_UNAVAILABLE"
+        "PRE_OUTCOME_ENGINEERING_INCIDENT_H2_SOURCE_THREAD_CONTRACT"
     )
     assert incident["outcome_boundary"]["candidate_energy_evaluations"] == 0
     route = value["route_contract"]
@@ -84,7 +89,15 @@ def test_unified_contract_preserves_no_go_and_freezes_one_route():
     assert route["stencil_order"] == [-2, -1, 1, 2]
     assert route["aer_fusion_enable"] is False
     assert route["aer_max_parallel_threads"] == 1
-    assert route["BLAS_and_OpenMP_threads"] == 1
+    assert route["source_reconstruction_thread_environment"] == {
+        "h2": 2,
+        "h4": 1,
+        "lih": 1,
+        "h6": 1,
+        "beh2": 1,
+    }
+    assert route["source_and_numerical_processes_are_separate"] is True
+    assert route["numerical_process_thread_environment"] == 1
     assert route["runtime_source_hash_validation"] == (
         "REQUIRED_BEFORE_CASE_PREPARATION"
     )
@@ -120,8 +133,12 @@ def test_published_unified_contract_is_content_addressed_and_source_bound():
         for path in SOURCE_PATHS
     } == value["source_binding"]
 
-    source = SOURCE_PATHS[0].read_text(encoding="utf-8")
-    batch = SOURCE_PATHS[1].read_text(encoding="utf-8")
+    source = next(
+        path for path in SOURCE_PATHS if path.name == "unified_route.py"
+    ).read_text(encoding="utf-8")
+    batch = next(
+        path for path in SOURCE_PATHS if path.name == "a100_unified_trajectory.sbatch"
+    ).read_text(encoding="utf-8")
     assert "super().gradient" not in source
     assert '"wall_time_seconds"' not in source
     for variable in (
@@ -131,14 +148,25 @@ def test_published_unified_contract_is_content_addressed_and_source_bound():
         "NUMEXPR_NUM_THREADS",
         "VECLIB_MAXIMUM_THREADS",
     ):
-        assert f"export {variable}=1" in batch
+        assert f'{variable}="${{source_threads}}"' in batch
+        assert f"{variable}=1" in batch
+    assert "A100_NUMERICAL_THREADS=1" in batch
 
 
 def test_runtime_binding_records_exact_commit_submodules_and_versions(monkeypatch):
     contract = load_json(CONTRACT)
     head = git("rev-parse", "HEAD")
     monkeypatch.setenv("A100_EXPECTED_HEAD", head)
-    value = _runtime_binding(contract)
+    for variable in (
+        "OMP_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+        "VECLIB_MAXIMUM_THREADS",
+    ):
+        monkeypatch.setenv(variable, "1")
+    monkeypatch.setenv("A100_NUMERICAL_THREADS", "1")
+    value = _runtime_binding(contract, "h4")
     assert value["git_head"] == value["expected_git_head"] == head
     assert value["contract_digest"] == contract["contract_digest"]
     assert value["source_sha256"] == contract["source_binding"]
@@ -154,12 +182,13 @@ def test_runtime_binding_records_exact_commit_submodules_and_versions(monkeypatc
     )
     assert len(value["parent_submodule_head"]) == 40
     assert len(value["CEO_submodule_head"]) == 40
+    assert set(value["numerical_process_thread_environment"].values()) == {"1"}
 
 
 def test_runtime_binding_fails_closed_on_wrong_commit(monkeypatch):
     monkeypatch.setenv("A100_EXPECTED_HEAD", "0" * 40)
     with pytest.raises(A100PilotError, match="runtime Git HEAD differs"):
-        _runtime_binding(load_json(CONTRACT))
+        _runtime_binding(load_json(CONTRACT), "h4")
 
 
 def test_pairwise_complex_reduction_and_normalization_are_repeatable():

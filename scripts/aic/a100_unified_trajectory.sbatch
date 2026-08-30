@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64000M
 #SBATCH --time=08:00:00
-#SBATCH --job-name=a100-unified-v3
+#SBATCH --job-name=a100-unified-v4
 
 set -euo pipefail
 : "${A100_CASE:?A100_CASE must be set}"
@@ -15,18 +15,32 @@ site="${root}/gpu-venv/lib/python3.10/site-packages"
 libs="$(find "${site}" -type d -path '*/lib' -print | sort | paste -sd: -)"
 export LD_LIBRARY_PATH="${libs}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 export PYTHONPATH="${repo}/src:${repo}/provenance/dvg-obs-ceo/src:${repo}/provenance/dvg-obs-ceo/vendor/ceo-adapt-vqe"
-export OMP_NUM_THREADS=1
-export OMP_DYNAMIC=FALSE
-export MKL_NUM_THREADS=1
-export MKL_DYNAMIC=FALSE
-export OPENBLAS_NUM_THREADS=1
-export NUMEXPR_NUM_THREADS=1
-export VECLIB_MAXIMUM_THREADS=1
-output="${root}/p3-unified-route-v3/${A100_CASE}.json"
+output="${root}/p3-unified-route-v4/${A100_CASE}.json"
+preparation="${root}/p3-unified-route-v4/preparation"
+bundle="${preparation}/${A100_CASE}.pickle"
+manifest="${preparation}/${A100_CASE}.json"
 mkdir -p "$(dirname "${output}")"
 
 cd "${repo}"
 test "$(git rev-parse HEAD)" = "${A100_EXPECTED_HEAD}"
-"${root}/gpu-venv/bin/python" -m aic_a100_pilot.unified_route \
+if [[ "${A100_CASE}" == "h2" ]]; then source_threads=2; else source_threads=1; fi
+env \
+  OMP_NUM_THREADS="${source_threads}" OMP_DYNAMIC=FALSE \
+  MKL_NUM_THREADS="${source_threads}" MKL_DYNAMIC=FALSE \
+  OPENBLAS_NUM_THREADS="${source_threads}" \
+  NUMEXPR_NUM_THREADS="${source_threads}" \
+  VECLIB_MAXIMUM_THREADS="${source_threads}" \
+  "${root}/gpu-venv/bin/python" -m aic_a100_pilot.unified_route_prepare \
   --case "${A100_CASE}" \
+  --bundle "${bundle}" \
+  --manifest "${manifest}"
+env \
+  OMP_NUM_THREADS=1 OMP_DYNAMIC=FALSE \
+  MKL_NUM_THREADS=1 MKL_DYNAMIC=FALSE \
+  OPENBLAS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 \
+  VECLIB_MAXIMUM_THREADS=1 A100_NUMERICAL_THREADS=1 \
+  "${root}/gpu-venv/bin/python" -m aic_a100_pilot.unified_route \
+  --case "${A100_CASE}" \
+  --prepared-bundle "${bundle}" \
+  --prepared-manifest "${manifest}" \
   --output "${output}"

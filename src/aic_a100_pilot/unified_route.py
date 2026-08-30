@@ -16,6 +16,7 @@ from importlib import metadata as importlib_metadata
 import json
 import os
 from pathlib import Path
+import pickle
 import platform
 import struct
 from types import SimpleNamespace
@@ -37,7 +38,6 @@ from .objective_parity import (
     PilotBoundary,
     _attempt_with_kernels,
     _contract_case,
-    _prepare,
     _serialize_attempt,
 )
 from .aer_gpu_backend import phase_aligned_max_error
@@ -76,7 +76,7 @@ def _software_version(
     }
 
 
-def _runtime_binding(contract: Mapping[str, Any]) -> dict[str, Any]:
+def _runtime_binding(contract: Mapping[str, Any], alias: str) -> dict[str, Any]:
     expected_head = os.environ.get("A100_EXPECTED_HEAD")
     if not expected_head or len(expected_head) != 40:
         raise A100PilotError("A100_EXPECTED_HEAD must contain one full Git SHA")
@@ -91,6 +91,20 @@ def _runtime_binding(contract: Mapping[str, Any]) -> dict[str, Any]:
     }
     if observed_sources != contract["source_binding"]:
         raise A100PilotError("runtime unified-route source hashes differ from contract")
+    thread_keys = (
+        "OMP_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+        "VECLIB_MAXIMUM_THREADS",
+    )
+    process_threads = {key: os.environ.get(key) for key in thread_keys}
+    if any(value != "1" for value in process_threads.values()):
+        raise A100PilotError(
+            "numerical route process thread environment differs from one"
+        )
+    if os.environ.get("A100_NUMERICAL_THREADS") != "1":
+        raise A100PilotError("A100_NUMERICAL_THREADS must be exactly one")
     versions = {
         "numpy": _software_version("numpy", ("numpy",)),
         "scipy": _software_version("scipy", ("scipy",)),
@@ -116,7 +130,43 @@ def _runtime_binding(contract: Mapping[str, Any]) -> dict[str, Any]:
         "source_sha256": observed_sources,
         "python_version": platform.python_version(),
         "distributions": versions,
+        "numerical_process_thread_environment": process_threads,
+        "registered_numerical_thread_limit": 1,
     }
+
+
+def _load_prepared_bundle(
+    *,
+    alias: str,
+    contract: Mapping[str, Any],
+    bundle_path: Path,
+    manifest_path: Path,
+) -> tuple[Any, Any, Any, dict[str, Any]]:
+    if not bundle_path.is_file() or not manifest_path.is_file():
+        raise A100PilotError("prepared source bundle or manifest is absent")
+    manifest = load_json(manifest_path)
+    if not embedded_digest_valid(manifest, "manifest_digest"):
+        raise A100PilotError("prepared source manifest digest is invalid")
+    expected = {
+        "alias": alias,
+        "contract_digest": contract["contract_digest"],
+        "git_head": os.environ["A100_EXPECTED_HEAD"],
+        "candidate_outcomes": 0,
+    }
+    if any(manifest.get(key) != value for key, value in expected.items()):
+        raise A100PilotError("prepared source manifest identity differs")
+    if manifest.get("bundle_sha256") != sha256_file(bundle_path):
+        raise A100PilotError("prepared source bundle SHA-256 differs")
+    with bundle_path.open("rb") as stream:
+        prepared = pickle.load(stream)
+    if not isinstance(prepared, tuple) or len(prepared) != 3:
+        raise A100PilotError("prepared source bundle payload is malformed")
+    context, plan, rewrite = prepared
+    if list(rewrite.verified_candidate_ids) != list(
+        manifest["verified_candidate_ids"]
+    ):
+        raise A100PilotError("prepared rewrite identity differs from manifest")
+    return context, plan, rewrite, manifest
 
 
 def _float_hex(value: float) -> str:
@@ -648,14 +698,25 @@ def _require_predecessors(alias: str, output_dir: Path) -> list[dict[str, str]]:
     return evidence
 
 
-def run_case(alias: str, *, output_dir: Path) -> dict[str, Any]:
+def run_case(
+    alias: str,
+    *,
+    output_dir: Path,
+    prepared_bundle: Path,
+    prepared_manifest: Path,
+) -> dict[str, Any]:
     contract = load_json(CONTRACT)
     if not embedded_digest_valid(contract, "contract_digest"):
         raise A100PilotError("unified route contract digest is invalid")
-    runtime_binding = _runtime_binding(contract)
+    runtime_binding = _runtime_binding(contract, alias)
     predecessors = _require_predecessors(alias, output_dir)
     _, specification = _contract_case(alias)
-    context, plan, rewrite = _prepare(alias, specification)
+    context, plan, rewrite, preparation_manifest = _load_prepared_bundle(
+        alias=alias,
+        contract=contract,
+        bundle_path=prepared_bundle,
+        manifest_path=prepared_manifest,
+    )
 
     cpu_boundary = PilotBoundary()
     cpu_kernel = UnifiedDeviceBoundary(
@@ -770,13 +831,19 @@ def run_case(alias: str, *, output_dir: Path) -> dict[str, Any]:
         "no_CPU_fallback": gpu_kernel.counters.N_cpu_fallback == 0,
     }
     result = {
-        "schema": "aic-a100-pilot.unified-route-trajectory-case.v3",
+        "schema": "aic-a100-pilot.unified-route-trajectory-case.v4",
         "status": "PASS" if all(checks.values()) else "FAIL",
         "alias": alias,
         "case_id": specification["case_id"],
         "candidate_id": specification["candidate_id"],
         "contract_digest": contract["contract_digest"],
         "runtime_binding": runtime_binding,
+        "source_preparation": {
+            "manifest_digest": preparation_manifest["manifest_digest"],
+            "bundle_sha256": preparation_manifest["bundle_sha256"],
+            "candidate_outcomes": 0,
+            "separate_process": True,
+        },
         "predecessors": predecessors,
         "checks": checks,
         "cpu": cpu,
@@ -829,10 +896,17 @@ def main() -> None:
         "--case", choices=("h2", "h4", "lih", "h6", "beh2"), required=True
     )
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--prepared-bundle", type=Path, required=True)
+    parser.add_argument("--prepared-manifest", type=Path, required=True)
     arguments = parser.parse_args()
     if arguments.output.exists():
         raise RuntimeError(f"refusing to overwrite parity evidence: {arguments.output}")
-    result = run_case(arguments.case, output_dir=arguments.output.parent)
+    result = run_case(
+        arguments.case,
+        output_dir=arguments.output.parent,
+        prepared_bundle=arguments.prepared_bundle,
+        prepared_manifest=arguments.prepared_manifest,
+    )
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
     arguments.output.write_text(
         json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8"
