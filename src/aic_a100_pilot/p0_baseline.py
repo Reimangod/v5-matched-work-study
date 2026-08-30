@@ -34,6 +34,7 @@ from .common import (
 P0 = ARTIFACT_ROOT / "p0-baseline"
 PROTOCOL = P0 / "a100-parity-protocol-v1.json"
 REFERENCE = P0 / "cpu-reference-bundle-v1.json"
+CANDIDATE_REFERENCE = P0 / "cpu-candidate-terminal-reference-supplement-v1.json"
 BASELINE_HEAD = "bca77f26aad98937e69e824cb8024960c6994e60"
 PARENT_COMMIT = "4783b9ff9f9b6f2061a1ef8c02613f4c6cef38db"
 CEO_COMMIT = "a3f89d03e6a03c89767d3cf8ee7657a57653dda0"
@@ -51,6 +52,17 @@ CALIBRATION_PLAN = (
 DEVELOPMENT_PLAN = (
     ROOT
     / "artifacts/v5-final/parent-native/s11-development-queue-v4/development-plan-v4.json"
+)
+DEVELOPMENT_CATALOG = (
+    ROOT
+    / "artifacts/v5-final/parent-native/s11-development-queue-v4/development-source-catalog-v1.json"
+)
+CALIBRATION_CATALOG = ROOT / "artifacts/v5-final/mb6-v2/h2-h4-source-catalog-v2.json"
+CALIBRATION_RESULT_ROOT = (
+    ROOT / "artifacts/v5-final/parent-native/s9-h2-h4-calibration-v3/item-results"
+)
+DEVELOPMENT_RESULT_ROOT = (
+    ROOT / "artifacts/v5-final/parent-native/s11-v2-production-execution-v1/results"
 )
 CASE_SPECS: dict[str, dict[str, Any]] = {
     "h2": {
@@ -438,11 +450,334 @@ def verify() -> dict[str, Any]:
     }
 
 
+def _source_catalogs() -> dict[str, dict[str, Any]]:
+    development = load_json(DEVELOPMENT_CATALOG)
+    calibration = load_json(CALIBRATION_CATALOG)
+    catalogs = {str(case["case_id"]): dict(case) for case in development["cases"]}
+    h2 = [
+        dict(case)
+        for case in calibration["cases"]
+        if case["case_id"] == CASE_SPECS["h2"]["case_id"]
+    ]
+    if len(h2) != 1:
+        raise A100PilotError("H2 source catalog is not unique")
+    catalogs[str(h2[0]["case_id"])] = h2[0]
+    return catalogs
+
+
+def _historical_result_records() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for path in sorted(CALIBRATION_RESULT_ROOT.glob("*.json"), key=lambda value: value.name):
+        value = load_json(path)
+        outcome = value.get("outcome") or {}
+        result = outcome.get("result") or {}
+        request = value.get("request") or {}
+        records.append(
+            {
+                "path": path,
+                "case_id": request.get("case_id"),
+                "method_id": request.get("method_id"),
+                "work_envelope": outcome.get("work_envelope"),
+                "queue_item_id": request.get("queue_item_id"),
+                "terminal_status": "HISTORICAL_CALIBRATION_RESULT",
+                "attempts": list(result.get("attempts", ())),
+                "record_digest": value.get("artifact_digest"),
+                "request": request,
+            }
+        )
+    development_plan = load_json(
+        ROOT
+        / "artifacts/v5-final/parent-native/s11-v2-queue-freeze-v2/s11-v2-queue-v2.json"
+    )
+    plan_items = {
+        str(item["queue_item_id"]): item for item in development_plan["items"]
+    }
+    for path in sorted(DEVELOPMENT_RESULT_ROOT.glob("*.json"), key=lambda value: value.name):
+        value = load_json(path)
+        outcome = value.get("outcome") or {}
+        result = outcome.get("result") or {}
+        queue_item_id = str(value.get("queue_item_id"))
+        plan_item = plan_items.get(queue_item_id)
+        if plan_item is None:
+            raise A100PilotError(f"S11 result is absent from frozen queue: {path.name}")
+        if (
+            plan_item.get("case_id") != value.get("case_id")
+            or plan_item.get("method_id") != value.get("method_id")
+            or plan_item.get("work_envelope") != value.get("work_envelope")
+        ):
+            raise A100PilotError(f"S11 result/queue semantic mismatch: {path.name}")
+        records.append(
+            {
+                "path": path,
+                "case_id": value.get("case_id"),
+                "method_id": value.get("method_id"),
+                "work_envelope": value.get("work_envelope"),
+                "queue_item_id": queue_item_id,
+                "terminal_status": value.get("terminal_status"),
+                "attempts": list(result.get("attempts", ())),
+                "record_digest": value.get("result_digest"),
+                "request": plan_item,
+            }
+        )
+    return records
+
+
+def _terminal_summary(
+    *,
+    descriptor: dict[str, Any],
+    record: dict[str, Any],
+    attempt_index: int,
+    attempt: dict[str, Any],
+) -> dict[str, Any]:
+    path = Path(record["path"])
+    candidate_ids = [str(value) for value in attempt.get("candidate_ids", ())]
+    selected_id = str(descriptor["candidate_id"])
+    if selected_id not in candidate_ids:
+        raise A100PilotError("selected candidate is absent from historical attempt")
+    acceptance = dict(attempt.get("acceptance") or {})
+    return {
+        "availability": "AVAILABLE_FROZEN_HISTORICAL_CPU_RESULT",
+        "candidate_id": selected_id,
+        "candidate_kind": descriptor.get("kind"),
+        "exact_generator_relation": descriptor.get("exact_generator_relation"),
+        "attempt_scope": (
+            "SINGLE_CANDIDATE" if len(candidate_ids) == 1 else "JOINT_RESULT_CONTAINS_CANDIDATE"
+        ),
+        "all_attempt_candidate_ids": candidate_ids,
+        "terminal_decision": "ACCEPTED" if bool(attempt.get("accepted")) else "REJECTED",
+        "energy_hartree": attempt.get("energy_hartree"),
+        "independent_energy_hartree": attempt.get("independent_energy_hartree"),
+        "gradient_infinity_norm": attempt.get("gradient_infinity_norm"),
+        "state_fidelity": attempt.get("state_fidelity"),
+        "optimizer_terminal": attempt.get("optimizer"),
+        "resource_vector": attempt.get("resources"),
+        "acceptance_checks": acceptance.get("checks"),
+        "acceptance_rejection_reasons": acceptance.get("rejection_reasons"),
+        "method_id": record["method_id"],
+        "work_envelope": record["work_envelope"],
+        "queue_item_id": record["queue_item_id"],
+        "historical_item_terminal_status": record["terminal_status"],
+        "attempt_index": int(attempt_index),
+        "source_result_path": path.relative_to(ROOT).as_posix(),
+        "source_result_sha256": sha256_file(path),
+        "source_result_embedded_digest": record["record_digest"],
+    }
+
+
+def _candidate_terminal_reference(
+    *,
+    case_id: str,
+    desired_exact: bool,
+    catalog: list[dict[str, Any]],
+    records: list[dict[str, Any]],
+) -> dict[str, Any]:
+    eligible = {
+        str(descriptor["candidate_id"]): descriptor
+        for descriptor in catalog
+        if (descriptor.get("exact_generator_relation") is not None) == desired_exact
+    }
+    if not eligible:
+        return {
+            "availability": (
+                "NO_EXACT_CANDIDATE_IN_SOURCE_CATALOG"
+                if desired_exact
+                else "NO_APPROXIMATE_CANDIDATE_IN_SOURCE_CATALOG"
+            ),
+            "terminal_decision": "NOT_APPLICABLE",
+        }
+    hits: list[tuple[bool, dict[str, Any], int, dict[str, Any], dict[str, Any]]] = []
+    for record in records:
+        if record["case_id"] != case_id:
+            continue
+        for attempt_index, attempt in enumerate(record["attempts"]):
+            candidate_ids = [str(value) for value in attempt.get("candidate_ids", ())]
+            matching = [eligible[value] for value in candidate_ids if value in eligible]
+            for descriptor in matching:
+                hits.append(
+                    (len(candidate_ids) != 1, record, attempt_index, attempt, descriptor)
+                )
+    if not hits:
+        return {
+            "availability": "CANDIDATE_CLASS_EXISTS_BUT_NO_FROZEN_CPU_TERMINAL_RESULT",
+            "catalog_candidate_count": len(eligible),
+            "terminal_decision": "NOT_OBSERVED",
+        }
+    # False sorts before True, so a single-candidate result is preferred over a
+    # joint result. Remaining order is the immutable path/attempt traversal.
+    _, record, attempt_index, attempt, descriptor = sorted(
+        hits,
+        key=lambda value: (
+            value[0],
+            Path(value[1]["path"]).as_posix(),
+            value[2],
+            str(value[4]["candidate_id"]),
+        ),
+    )[0]
+    return _terminal_summary(
+        descriptor=descriptor,
+        record=record,
+        attempt_index=attempt_index,
+        attempt=attempt,
+    )
+
+
+def build_candidate_reference_supplement() -> dict[str, Any]:
+    protocol = load_json(PROTOCOL)
+    reference = load_json(REFERENCE)
+    if not embedded_digest_valid(protocol, "protocol_digest"):
+        raise A100PilotError("P0 protocol digest is invalid")
+    if not embedded_digest_valid(reference, "reference_digest"):
+        raise A100PilotError("P0 reference digest is invalid")
+    catalogs = _source_catalogs()
+    records = _historical_result_records()
+    cases: list[dict[str, Any]] = []
+    for source in reference["cases"]:
+        case_id = str(source["case_id"])
+        catalog_case = catalogs.get(case_id)
+        if catalog_case is None:
+            raise A100PilotError(f"source catalog missing: {case_id}")
+        if (
+            catalog_case.get("ProblemID") != source.get("ProblemID")
+            or catalog_case.get("StatePreparationID") != source.get("StatePreparationID")
+            or catalog_case.get("Hamiltonian_digest") != source.get("Hamiltonian_digest")
+        ):
+            raise A100PilotError(f"P0/source catalog identity mismatch: {case_id}")
+        catalog = [dict(value) for value in catalog_case["source_structural_catalog"]]
+        cases.append(
+            {
+                "alias": source["alias"],
+                "case_id": case_id,
+                "ProblemID": source["ProblemID"],
+                "StatePreparationID": source["StatePreparationID"],
+                "Hamiltonian_digest": source["Hamiltonian_digest"],
+                "source_catalog_candidate_count": len(catalog),
+                "exact_candidate_terminal_reference": _candidate_terminal_reference(
+                    case_id=case_id,
+                    desired_exact=True,
+                    catalog=catalog,
+                    records=records,
+                ),
+                "approximate_candidate_terminal_reference": _candidate_terminal_reference(
+                    case_id=case_id,
+                    desired_exact=False,
+                    catalog=catalog,
+                    records=records,
+                ),
+            }
+        )
+    body = {
+        "schema": "aic-a100-pilot.cpu-candidate-terminal-reference-supplement.v1",
+        "status": "ADDITIVE_POST_P1_AUDIT_COMPLETION_OF_P0_REFERENCE_CONTRACT",
+        "protocol_digest": protocol["protocol_digest"],
+        "reference_digest": reference["reference_digest"],
+        "provenance_policy": {
+            "result_source": "IMMUTABLE_HISTORICAL_CPU_RESULT_READ_ONLY",
+            "selection_rule": (
+                "For each source/class, prefer the lexicographically first frozen "
+                "single-candidate result; otherwise use the first frozen joint result."
+            ),
+            "new_candidate_energy_evaluations": 0,
+            "new_optimizer_runs": 0,
+            "new_FCI_evaluations": 0,
+            "P1_decision_changed": False,
+        },
+        "source_catalogs": {
+            "calibration": {
+                "path": CALIBRATION_CATALOG.relative_to(ROOT).as_posix(),
+                "sha256": sha256_file(CALIBRATION_CATALOG),
+            },
+            "development": {
+                "path": DEVELOPMENT_CATALOG.relative_to(ROOT).as_posix(),
+                "sha256": sha256_file(DEVELOPMENT_CATALOG),
+            },
+        },
+        "cases": cases,
+        "candidate_molecular_energy_evaluations_during_supplement": 0,
+        "FCI_evaluations_during_supplement": 0,
+    }
+    return publish(CANDIDATE_REFERENCE, body, "supplement_digest")
+
+
+def verify_candidate_reference_supplement() -> dict[str, Any]:
+    value = load_json(CANDIDATE_REFERENCE)
+    rebuilt = build_candidate_reference_supplement_body()
+    checks = {
+        "embedded_digest": embedded_digest_valid(value, "supplement_digest"),
+        "deterministic_rebuild": {
+            key: item for key, item in value.items() if key != "supplement_digest"
+        }
+        == rebuilt,
+        "five_cases_exact_order": [case["alias"] for case in value["cases"]]
+        == list(CASE_SPECS),
+        "all_available_results_terminal": all(
+            result["terminal_decision"] in {"ACCEPTED", "REJECTED", "NOT_APPLICABLE"}
+            for case in value["cases"]
+            for result in (
+                case["exact_candidate_terminal_reference"],
+                case["approximate_candidate_terminal_reference"],
+            )
+        ),
+        "no_new_outcomes": value["candidate_molecular_energy_evaluations_during_supplement"]
+        == 0
+        and value["FCI_evaluations_during_supplement"] == 0,
+    }
+    return {"decision": "GO_P0_REFERENCE_CONTRACT_COMPLETE" if all(checks.values()) else "NO_GO_P0_REFERENCE_SUPPLEMENT", "checks": checks, "supplement_digest": value.get("supplement_digest")}
+
+
+def build_candidate_reference_supplement_body() -> dict[str, Any]:
+    """Rebuild the supplement body without publishing it."""
+
+    protocol = load_json(PROTOCOL)
+    reference = load_json(REFERENCE)
+    catalogs = _source_catalogs()
+    records = _historical_result_records()
+    cases: list[dict[str, Any]] = []
+    for source in reference["cases"]:
+        case_id = str(source["case_id"])
+        catalog_case = catalogs[case_id]
+        catalog = [dict(value) for value in catalog_case["source_structural_catalog"]]
+        cases.append(
+            {
+                "alias": source["alias"],
+                "case_id": case_id,
+                "ProblemID": source["ProblemID"],
+                "StatePreparationID": source["StatePreparationID"],
+                "Hamiltonian_digest": source["Hamiltonian_digest"],
+                "source_catalog_candidate_count": len(catalog),
+                "exact_candidate_terminal_reference": _candidate_terminal_reference(case_id=case_id, desired_exact=True, catalog=catalog, records=records),
+                "approximate_candidate_terminal_reference": _candidate_terminal_reference(case_id=case_id, desired_exact=False, catalog=catalog, records=records),
+            }
+        )
+    return {
+        "schema": "aic-a100-pilot.cpu-candidate-terminal-reference-supplement.v1",
+        "status": "ADDITIVE_POST_P1_AUDIT_COMPLETION_OF_P0_REFERENCE_CONTRACT",
+        "protocol_digest": protocol["protocol_digest"],
+        "reference_digest": reference["reference_digest"],
+        "provenance_policy": {
+            "result_source": "IMMUTABLE_HISTORICAL_CPU_RESULT_READ_ONLY",
+            "selection_rule": "For each source/class, prefer the lexicographically first frozen single-candidate result; otherwise use the first frozen joint result.",
+            "new_candidate_energy_evaluations": 0,
+            "new_optimizer_runs": 0,
+            "new_FCI_evaluations": 0,
+            "P1_decision_changed": False,
+        },
+        "source_catalogs": {
+            "calibration": {"path": CALIBRATION_CATALOG.relative_to(ROOT).as_posix(), "sha256": sha256_file(CALIBRATION_CATALOG)},
+            "development": {"path": DEVELOPMENT_CATALOG.relative_to(ROOT).as_posix(), "sha256": sha256_file(DEVELOPMENT_CATALOG)},
+        },
+        "cases": cases,
+        "candidate_molecular_energy_evaluations_during_supplement": 0,
+        "FCI_evaluations_during_supplement": 0,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--freeze-protocol", action="store_true")
     parser.add_argument("--build-reference", action="store_true")
     parser.add_argument("--verify", action="store_true")
+    parser.add_argument("--build-candidate-reference-supplement", action="store_true")
+    parser.add_argument("--verify-candidate-reference-supplement", action="store_true")
     parser.add_argument("--case", choices=tuple(CASE_SPECS))
     parser.add_argument("--case-output", type=Path)
     arguments = parser.parse_args()
@@ -456,13 +791,17 @@ def main() -> None:
             encoding="utf-8",
         )
         return
-    selected = sum((arguments.freeze_protocol, arguments.build_reference, arguments.verify))
+    selected = sum((arguments.freeze_protocol, arguments.build_reference, arguments.verify, arguments.build_candidate_reference_supplement, arguments.verify_candidate_reference_supplement))
     if selected != 1:
         raise A100PilotError("select exactly one P0 action")
     if arguments.freeze_protocol:
         result = freeze_protocol()
     elif arguments.build_reference:
         result = build_reference()
+    elif arguments.build_candidate_reference_supplement:
+        result = build_candidate_reference_supplement()
+    elif arguments.verify_candidate_reference_supplement:
+        result = verify_candidate_reference_supplement()
     else:
         result = verify()
     print(json.dumps(result, allow_nan=False, ensure_ascii=False, indent=2, sort_keys=True))

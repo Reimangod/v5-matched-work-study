@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from aic_a100_pilot.decision_gate import decision_body
+from aic_a100_pilot.decision_gate import decision_body, reference_complete_decision_body
 from aic_a100_pilot.environment import operational_no_go_body
 
 
@@ -25,3 +25,20 @@ def test_p6_stops_all_outcome_phases():
     assert value["parity_table_status"] == "NOT_EXECUTED"
     assert value["speedup_table_status"] == "NOT_EXECUTED"
     assert all(number == 0 for number in value["route_counters"].values())
+
+
+def test_p6_v2_binds_complete_reference_without_changing_no_go():
+    value = reference_complete_decision_body()
+    assert value["status"] == "NO_GO_A100_OPERATIONAL_INSTABILITY"
+    assert value["supersedes_without_mutation"]["status_unchanged"] is True
+    assert value["P0_reference_contract"] == {
+        "status": "COMPLETE_BY_ADDITIVE_SUPPLEMENT",
+        "five_source_state_references": 5,
+        "exact_terminal_references_available": 3,
+        "exact_class_absent_from_source_catalog": 2,
+        "approximate_terminal_references_available": 5,
+        "new_candidate_energy_evaluations": 0,
+        "new_optimizer_runs": 0,
+        "new_FCI_evaluations": 0,
+    }
+    assert value["phase_status"]["P2_GPU_ENVIRONMENT_AND_SMOKE"] == "NOT_STARTED_NOT_AUTHORIZED"

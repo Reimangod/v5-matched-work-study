@@ -8,11 +8,12 @@ from typing import Any
 
 from .common import ARTIFACT_ROOT, embedded_digest_valid, load_json, publish
 from .environment import PREFLIGHT
-from .p0_baseline import PROTOCOL, REFERENCE
+from .p0_baseline import CANDIDATE_REFERENCE, PROTOCOL, REFERENCE
 
 
 P6 = ARTIFACT_ROOT / "p6-decision"
 DECISION = P6 / "a100-pilot-terminal-decision-v1.json"
+DECISION_V2 = P6 / "a100-pilot-terminal-decision-v2.json"
 
 
 def decision_body() -> dict[str, Any]:
@@ -93,13 +94,92 @@ def publish_decision() -> dict[str, Any]:
     return publish(DECISION, decision_body(), "decision_digest")
 
 
+def reference_complete_decision_body() -> dict[str, Any]:
+    prior = load_json(DECISION)
+    supplement = load_json(CANDIDATE_REFERENCE)
+    if not embedded_digest_valid(prior, "decision_digest"):
+        raise RuntimeError("P6 v1 decision digest is invalid")
+    if not embedded_digest_valid(supplement, "supplement_digest"):
+        raise RuntimeError("P0 candidate supplement digest is invalid")
+    if prior["status"] != "NO_GO_A100_OPERATIONAL_INSTABILITY":
+        raise RuntimeError("P6 v1 is not the expected operational No-Go")
+    if supplement["provenance_policy"]["P1_decision_changed"] is not False:
+        raise RuntimeError("candidate supplement attempted to change the P1 decision")
+    return {
+        "schema": "aic-a100-pilot.terminal-decision.v2",
+        "status": "NO_GO_A100_OPERATIONAL_INSTABILITY",
+        "terminal_phase": "P6_FORMAL_DECISION_WITH_COMPLETE_P0_REFERENCE_CONTRACT",
+        "supersedes_without_mutation": {
+            "path": DECISION.relative_to(ARTIFACT_ROOT.parent.parent).as_posix(),
+            "decision_digest": prior["decision_digest"],
+            "status_unchanged": True,
+        },
+        "evidence_binding": {
+            **dict(prior["evidence_binding"]),
+            "P0_candidate_reference_supplement_digest": supplement[
+                "supplement_digest"
+            ],
+        },
+        "P0_reference_contract": {
+            "status": "COMPLETE_BY_ADDITIVE_SUPPLEMENT",
+            "five_source_state_references": len(supplement["cases"]),
+            "exact_terminal_references_available": sum(
+                case["exact_candidate_terminal_reference"]["availability"]
+                == "AVAILABLE_FROZEN_HISTORICAL_CPU_RESULT"
+                for case in supplement["cases"]
+            ),
+            "exact_class_absent_from_source_catalog": sum(
+                case["exact_candidate_terminal_reference"]["availability"]
+                == "NO_EXACT_CANDIDATE_IN_SOURCE_CATALOG"
+                for case in supplement["cases"]
+            ),
+            "approximate_terminal_references_available": sum(
+                case["approximate_candidate_terminal_reference"]["availability"]
+                == "AVAILABLE_FROZEN_HISTORICAL_CPU_RESULT"
+                for case in supplement["cases"]
+            ),
+            "new_candidate_energy_evaluations": supplement["provenance_policy"][
+                "new_candidate_energy_evaluations"
+            ],
+            "new_optimizer_runs": supplement["provenance_policy"][
+                "new_optimizer_runs"
+            ],
+            "new_FCI_evaluations": supplement["provenance_policy"][
+                "new_FCI_evaluations"
+            ],
+        },
+        "phase_status": dict(prior["phase_status"]),
+        "decision_rationale": prior["decision_rationale"],
+        "hardware_observation": dict(prior["hardware_observation"]),
+        "route_counters": dict(prior["route_counters"]),
+        "parity_table": list(prior["parity_table"]),
+        "parity_table_status": prior["parity_table_status"],
+        "speedup_table": list(prior["speedup_table"]),
+        "speedup_table_status": prior["speedup_table_status"],
+        "slurm_job_ids": list(prior["slurm_job_ids"]),
+        "rollback": dict(prior["rollback"]),
+        "scientific_boundaries": dict(prior["scientific_boundaries"]),
+        "safe_reentry_conditions": list(prior["safe_reentry_conditions"]),
+    }
+
+
+def publish_reference_complete_decision() -> dict[str, Any]:
+    return publish(DECISION_V2, reference_complete_decision_body(), "decision_digest")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--publish", action="store_true")
+    parser.add_argument("--publish-reference-complete-v2", action="store_true")
     arguments = parser.parse_args()
-    if not arguments.publish:
-        raise RuntimeError("select --publish")
-    print(json.dumps(publish_decision(), indent=2, sort_keys=True))
+    if arguments.publish == arguments.publish_reference_complete_v2:
+        raise RuntimeError("select exactly one publication action")
+    value = (
+        publish_decision()
+        if arguments.publish
+        else publish_reference_complete_decision()
+    )
+    print(json.dumps(value, indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":
