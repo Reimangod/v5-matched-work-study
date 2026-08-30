@@ -19,9 +19,13 @@ from .p0_baseline import PROTOCOL
 from .p3_objective_contract import CONTRACT as HYBRID_CONTRACT
 
 
-CONTRACT = (
+CONTRACT_V1 = (
     ARTIFACT_ROOT
     / "p3-unified-route-v1/unified-route-trajectory-contract-v1.json"
+)
+CONTRACT = (
+    ARTIFACT_ROOT
+    / "p3-unified-route-v2/unified-route-trajectory-contract-v2.json"
 )
 HYBRID_REPORT = (
     ARTIFACT_ROOT
@@ -67,9 +71,20 @@ def contract_body() -> dict[str, Any]:
         raise RuntimeError(f"unified-route implementation is incomplete: {missing}")
     tolerances = protocol["tolerances"]
     return {
-        "schema": "aic-a100-pilot.unified-route-trajectory-contract.v1",
+        "schema": "aic-a100-pilot.unified-route-trajectory-contract.v2",
         "status": "GO_BOUNDED_UNIFIED_ROUTE_TRAJECTORY_PARITY",
         "frozen_before_new_unified_route_candidate_outcomes": True,
+        "pre_outcome_correction": {
+            "superseded_contract": _binding(
+                CONTRACT_V1, embedded_field="contract_digest"
+            ),
+            "new_unified_route_candidate_outcomes_before_v2_freeze": 0,
+            "reason": (
+                "v1 bound source hashes but did not require each result to carry "
+                "its exact Git, submodule, and software runtime identity"
+            ),
+            "v1_remains_immutable": True,
+        },
         "immutable_predecessor_no_go": {
             "preserved_without_mutation": True,
             "hybrid_report": _binding(
@@ -122,6 +137,11 @@ def contract_body() -> dict[str, Any]:
             "aer_seed_simulator": 0,
             "BLAS_and_OpenMP_threads": 1,
             "CPU_fallback_allowed": False,
+            "runtime_source_hash_validation": "REQUIRED_BEFORE_CASE_PREPARATION",
+            "result_runtime_identity": (
+                "exact Git HEAD, expected HEAD, submodule HEADs, contract file SHA, "
+                "source SHAs, Python, NumPy, SciPy, Qiskit, and Qiskit Aer"
+            ),
         },
         "optimizer_contract": {
             "optimizer": "pinned adaptvqe.minimize:minimize_bfgs",

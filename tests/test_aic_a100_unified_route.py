@@ -12,17 +12,20 @@ from aic_a100_pilot.common import (
     A100PilotError,
     digest,
     embedded_digest_valid,
+    git,
     load_json,
     sha256_file,
 )
 from aic_a100_pilot.unified_route import (
     DeterministicHamiltonian,
     _require_predecessors,
+    _runtime_binding,
     deterministic_normalize,
     fixed_pairwise_complex_sum,
 )
 from aic_a100_pilot.unified_route_contract import (
     CONTRACT,
+    CONTRACT_V1,
     HYBRID_REPORT,
     SOURCE_PATHS,
     TERMINAL_NO_GO,
@@ -36,6 +39,9 @@ EXPECTED_HYBRID_REPORT_SHA256 = (
 EXPECTED_TERMINAL_NO_GO_SHA256 = (
     "f53dc4ad3293a426a8a707498d2d7db600a71a595d59559b71fbfdaf8f66835a"
 )
+EXPECTED_UNIFIED_V1_SHA256 = (
+    "0a3fc81eb48fc0cc8af2792f211e2c06cd73bccc2059072e66c340f0a0aa8e36"
+)
 
 
 def _float_hex(value: float) -> str:
@@ -44,6 +50,7 @@ def _float_hex(value: float) -> str:
 
 def test_unified_contract_preserves_no_go_and_freezes_one_route():
     value = contract_body()
+    assert value["schema"].endswith(".v2")
     assert value["status"] == "GO_BOUNDED_UNIFIED_ROUTE_TRAJECTORY_PARITY"
     assert value["frozen_before_new_unified_route_candidate_outcomes"] is True
     assert sha256_file(HYBRID_REPORT) == EXPECTED_HYBRID_REPORT_SHA256
@@ -54,6 +61,13 @@ def test_unified_contract_preserves_no_go_and_freezes_one_route():
     assert predecessor["terminal_decision"]["sha256"] == (
         EXPECTED_TERMINAL_NO_GO_SHA256
     )
+    correction = value["pre_outcome_correction"]
+    assert sha256_file(CONTRACT_V1) == EXPECTED_UNIFIED_V1_SHA256
+    assert correction["superseded_contract"]["sha256"] == (
+        EXPECTED_UNIFIED_V1_SHA256
+    )
+    assert correction["new_unified_route_candidate_outcomes_before_v2_freeze"] == 0
+    assert correction["v1_remains_immutable"] is True
     route = value["route_contract"]
     assert route["CPU_analytic_gradient_used"] is False
     assert route["finite_difference_step_float64_hex"] == _float_hex(1e-4)
@@ -61,6 +75,9 @@ def test_unified_contract_preserves_no_go_and_freezes_one_route():
     assert route["aer_fusion_enable"] is False
     assert route["aer_max_parallel_threads"] == 1
     assert route["BLAS_and_OpenMP_threads"] == 1
+    assert route["runtime_source_hash_validation"] == (
+        "REQUIRED_BEFORE_CASE_PREPARATION"
+    )
     assert value["sequential_gate"]["case_order"] == [
         "h2",
         "h4",
@@ -105,6 +122,30 @@ def test_published_unified_contract_is_content_addressed_and_source_bound():
         "VECLIB_MAXIMUM_THREADS",
     ):
         assert f"export {variable}=1" in batch
+
+
+def test_runtime_binding_records_exact_commit_submodules_and_versions(monkeypatch):
+    contract = load_json(CONTRACT)
+    head = git("rev-parse", "HEAD")
+    monkeypatch.setenv("A100_EXPECTED_HEAD", head)
+    value = _runtime_binding(contract)
+    assert value["git_head"] == value["expected_git_head"] == head
+    assert value["contract_digest"] == contract["contract_digest"]
+    assert value["source_sha256"] == contract["source_binding"]
+    assert set(value["distributions"]) == {
+        "numpy",
+        "scipy",
+        "qiskit",
+        "qiskit-aer",
+    }
+    assert len(value["parent_submodule_head"]) == 40
+    assert len(value["CEO_submodule_head"]) == 40
+
+
+def test_runtime_binding_fails_closed_on_wrong_commit(monkeypatch):
+    monkeypatch.setenv("A100_EXPECTED_HEAD", "0" * 40)
+    with pytest.raises(A100PilotError, match="runtime Git HEAD differs"):
+        _runtime_binding(load_json(CONTRACT))
 
 
 def test_pairwise_complex_reduction_and_normalization_are_repeatable():

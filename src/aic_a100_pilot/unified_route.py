@@ -11,9 +11,11 @@ from __future__ import annotations
 import argparse
 from dataclasses import asdict, dataclass
 import hashlib
+from importlib import metadata as importlib_metadata
 import json
 import os
 from pathlib import Path
+import platform
 import struct
 from types import SimpleNamespace
 from typing import Any, Mapping, Sequence
@@ -21,7 +23,15 @@ from typing import Any, Mapping, Sequence
 import numpy as np
 
 from .benchmark import _gpu_observation
-from .common import A100PilotError, digest, embedded_digest_valid, load_json
+from .common import (
+    A100PilotError,
+    ROOT,
+    digest,
+    embedded_digest_valid,
+    git,
+    load_json,
+    sha256_file,
+)
 from .objective_parity import (
     PilotBoundary,
     _attempt_with_kernels,
@@ -30,11 +40,50 @@ from .objective_parity import (
     _serialize_attempt,
 )
 from .aer_gpu_backend import phase_aligned_max_error
-from .unified_route_contract import CONTRACT
+from .unified_route_contract import CONTRACT, SOURCE_PATHS
 
 
 STENCIL = (-2, -1, 1, 2)
 FINITE_DIFFERENCE_STEP = np.float64(1e-4)
+
+
+def _runtime_binding(contract: Mapping[str, Any]) -> dict[str, Any]:
+    expected_head = os.environ.get("A100_EXPECTED_HEAD")
+    if not expected_head or len(expected_head) != 40:
+        raise A100PilotError("A100_EXPECTED_HEAD must contain one full Git SHA")
+    actual_head = git("rev-parse", "HEAD")
+    if actual_head != expected_head:
+        raise A100PilotError(
+            f"runtime Git HEAD differs: {actual_head} != {expected_head}"
+        )
+    observed_sources = {
+        path.relative_to(ROOT).as_posix(): sha256_file(path)
+        for path in SOURCE_PATHS
+    }
+    if observed_sources != contract["source_binding"]:
+        raise A100PilotError("runtime unified-route source hashes differ from contract")
+    versions = {
+        distribution: importlib_metadata.version(distribution)
+        for distribution in ("numpy", "scipy", "qiskit", "qiskit-aer")
+    }
+    return {
+        "git_head": actual_head,
+        "expected_git_head": expected_head,
+        "parent_submodule_head": git(
+            "rev-parse", "HEAD", root=ROOT / "provenance/dvg-obs-ceo"
+        ),
+        "CEO_submodule_head": git(
+            "rev-parse",
+            "HEAD",
+            root=ROOT / "provenance/dvg-obs-ceo/vendor/ceo-adapt-vqe",
+        ),
+        "contract_path": CONTRACT.relative_to(ROOT).as_posix(),
+        "contract_file_sha256": sha256_file(CONTRACT),
+        "contract_digest": contract["contract_digest"],
+        "source_sha256": observed_sources,
+        "python_version": platform.python_version(),
+        "distributions": versions,
+    }
 
 
 def _float_hex(value: float) -> str:
@@ -570,6 +619,7 @@ def run_case(alias: str, *, output_dir: Path) -> dict[str, Any]:
     contract = load_json(CONTRACT)
     if not embedded_digest_valid(contract, "contract_digest"):
         raise A100PilotError("unified route contract digest is invalid")
+    runtime_binding = _runtime_binding(contract)
     predecessors = _require_predecessors(alias, output_dir)
     _, specification = _contract_case(alias)
     context, plan, rewrite = _prepare(alias, specification)
@@ -687,12 +737,13 @@ def run_case(alias: str, *, output_dir: Path) -> dict[str, Any]:
         "no_CPU_fallback": gpu_kernel.counters.N_cpu_fallback == 0,
     }
     result = {
-        "schema": "aic-a100-pilot.unified-route-trajectory-case.v1",
+        "schema": "aic-a100-pilot.unified-route-trajectory-case.v2",
         "status": "PASS" if all(checks.values()) else "FAIL",
         "alias": alias,
         "case_id": specification["case_id"],
         "candidate_id": specification["candidate_id"],
         "contract_digest": contract["contract_digest"],
+        "runtime_binding": runtime_binding,
         "predecessors": predecessors,
         "checks": checks,
         "cpu": cpu,
