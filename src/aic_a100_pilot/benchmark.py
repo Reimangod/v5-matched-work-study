@@ -10,6 +10,7 @@ evaluated by this module.
 from __future__ import annotations
 
 import argparse
+import ctypes
 import hashlib
 import json
 import os
@@ -54,17 +55,54 @@ def _gpu_observation() -> dict[str, Any]:
         stderr=subprocess.PIPE,
         text=True,
     )
-    rows = [row.strip() for row in completed.stdout.splitlines() if row.strip()]
-    if len(rows) != 1:
-        raise A100PilotError(f"expected exactly one visible GPU, observed {len(rows)}")
-    fields = [field.strip() for field in rows[0].split(",")]
-    if len(fields) != 4 or "A100" not in fields[0].upper():
-        raise A100PilotError(f"allocated GPU is not one A100: {fields!r}")
+    rows = [
+        [field.strip() for field in row.split(",")]
+        for row in completed.stdout.splitlines()
+        if row.strip()
+    ]
+    if not rows or any(len(fields) != 4 for fields in rows):
+        raise A100PilotError("nvidia-smi management inventory is malformed")
+    if any("A100" not in fields[0].upper() for fields in rows):
+        raise A100PilotError(f"management inventory contains a non-A100: {rows!r}")
+    visible = [
+        value.strip()
+        for value in os.environ.get("CUDA_VISIBLE_DEVICES", "").split(",")
+        if value.strip()
+    ]
+    job_gpus = [
+        value.strip()
+        for value in os.environ.get("SLURM_JOB_GPUS", "").split(",")
+        if value.strip()
+    ]
+    driver = ctypes.CDLL("libcuda.so.1")
+    if int(driver.cuInit(0)) != 0:
+        raise A100PilotError("CUDA driver initialization failed")
+    count = ctypes.c_int()
+    if int(driver.cuDeviceGetCount(ctypes.byref(count))) != 0:
+        raise A100PilotError("CUDA device-count query failed")
+    if len(visible) != 1 or len(job_gpus) != 1 or count.value != 1:
+        raise A100PilotError(
+            "Slurm/CUDA allocation is not exactly one device: "
+            f"CUDA_VISIBLE_DEVICES={len(visible)}, SLURM_JOB_GPUS={len(job_gpus)}, "
+            f"CUDA_driver={count.value}"
+        )
+    models = sorted({fields[0] for fields in rows})
+    drivers = sorted({fields[2] for fields in rows})
+    memories = sorted({int(fields[3]) for fields in rows})
+    if len(models) != 1 or len(drivers) != 1 or len(memories) != 1:
+        raise A100PilotError("management-visible A100 devices are heterogeneous")
     return {
-        "model": fields[0],
-        "uuid": fields[1],
-        "driver_version": fields[2],
-        "memory_total_mib": int(fields[3]),
+        "model": models[0],
+        "driver_version": drivers[0],
+        "memory_total_mib": memories[0],
+        "slurm_job_gpu_count": len(job_gpus),
+        "CUDA_VISIBLE_DEVICES_count": len(visible),
+        "cuda_driver_device_count": count.value,
+        "nvidia_smi_management_visible_count": len(rows),
+        "scope_explanation": (
+            "nvidia-smi reports node-management inventory; the Slurm selectors and "
+            "CUDA driver inside the job expose exactly the one allocated A100."
+        ),
     }
 
 
