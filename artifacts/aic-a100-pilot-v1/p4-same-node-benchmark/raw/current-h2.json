@@ -1,0 +1,123 @@
+{
+  "FCI_evaluations": 0,
+  "Hamiltonian_digest": "263c1ac02b58e3a2e685c55b07387ed444e52c92556569eefd50894983869507",
+  "P0_protocol_digest": "15e04792aa8a4cd9102b797d0263bc7cb1e5a6cca691b18292952096979ba6cb",
+  "ProblemID": "problem-v1:e594aa0fcea0285ec843a661dacf22eeaa5e63a1876a6ebae9d1eb98ab24b339",
+  "StatePreparationID": "state-v1:7bafeb2b6caf3a4d583609186f5e78c5a775289da4b49cc42ddb75aabb3a6b85",
+  "alias": "h2",
+  "benchmark_kind": "CURRENT_FROZEN_SOURCE",
+  "candidate_molecular_energy_evaluations": 0,
+  "case_id": "h2-1.5-iteration-1",
+  "hardware": {
+    "gpu": {
+      "CUDA_VISIBLE_DEVICES_count": 1,
+      "cuda_driver_device_count": 1,
+      "driver_version": "570.195.03",
+      "memory_total_mib": 81920,
+      "model": "NVIDIA A100-SXM4-80GB",
+      "nvidia_smi_management_visible_count": 3,
+      "scope_explanation": "nvidia-smi reports node-management inventory; the Slurm selectors and CUDA driver inside the job expose exactly the one allocated A100.",
+      "slurm_job_gpu_count": 1
+    },
+    "machine": "x86_64",
+    "node": "dgx-a100",
+    "python_version": "3.10.19",
+    "slurm_job_id": 1986
+  },
+  "measurement": {
+    "alternating_order": "CPU_FIRST_ON_EVEN_REPETITIONS_GPU_FIRST_ON_ODD",
+    "checks": {
+      "energy": true,
+      "explicit_gpu_metadata": true,
+      "no_cpu_fallback": true,
+      "state": true
+    },
+    "cpu_median_seconds": 0.001249719993211329,
+    "cpu_seconds": [
+      0.0013204339193180203,
+      0.001249719993211329,
+      0.0012242509983479977,
+      0.0012515319976955652,
+      0.0012291599996387959
+    ],
+    "errors": {
+      "absolute_energy_hartree": 2.220446049250313e-16,
+      "phase_aligned_state_max_abs": 1.5700924586837752e-16
+    },
+    "gpu_median_seconds": 0.0016688939649611712,
+    "gpu_metadata": [
+      {
+        "device": "GPU",
+        "method": "statevector"
+      },
+      {
+        "device": "GPU",
+        "method": "statevector"
+      },
+      {
+        "device": "GPU",
+        "method": "statevector"
+      },
+      {
+        "device": "GPU",
+        "method": "statevector"
+      },
+      {
+        "device": "GPU",
+        "method": "statevector"
+      }
+    ],
+    "gpu_seconds": [
+      0.0017630530055612326,
+      0.0016800849698483944,
+      0.0016688939649611712,
+      0.0016432249685749412,
+      0.0016605190467089415
+    ],
+    "measured_repetitions": 5,
+    "measured_route_counters": {
+      "N_cpu_energy": 10,
+      "N_cpu_fallback": 0,
+      "N_cpu_gradient_component": 0,
+      "N_cpu_statevector": 5,
+      "N_gpu_energy": 5,
+      "N_gpu_gradient_component": 0,
+      "N_gpu_statevector": 5
+    },
+    "speedup_cpu_over_gpu": 0.74883127355572,
+    "timing_scope": {
+      "excluded": [
+        "molecular integral construction",
+        "source context reconstruction",
+        "candidate catalog construction",
+        "circuit construction",
+        "optimizer",
+        "FCI"
+      ],
+      "included": [
+        "statevector propagation",
+        "statevector normalization",
+        "sparse Hamiltonian expectation on host",
+        "GPU result synchronization and state transfer for GPU route"
+      ]
+    },
+    "warmup_repetitions": 1,
+    "warmup_route_counters": {
+      "N_cpu_energy": 2,
+      "N_cpu_fallback": 0,
+      "N_cpu_gradient_component": 0,
+      "N_cpu_statevector": 1,
+      "N_gpu_energy": 1,
+      "N_gpu_gradient_component": 0,
+      "N_gpu_statevector": 1
+    }
+  },
+  "optimizer_runs": 0,
+  "performance_claim_authorized": false,
+  "qubit_count": 4,
+  "record_digest": "65e7fdf29e6c06ba6b9fdfac07d734ca2f1af7348c939c2edd90bce319f0fbe3",
+  "same_aic_node_cpu_gpu": true,
+  "schema": "aic-a100-pilot.p4-same-node-route-benchmark.v1",
+  "source_qasm_sha256": "ac07b604970fadb275bc9baa04d2a13d5d39ad24194de9d7c939ec28674c4dce",
+  "threads": 2
+}
