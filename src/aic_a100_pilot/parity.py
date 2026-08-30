@@ -20,6 +20,7 @@ from pathlib import Path
 import platform
 import struct
 import sys
+from types import SimpleNamespace
 from typing import Any, Sequence
 
 import numpy as np
@@ -73,18 +74,12 @@ def build_context(alias: str) -> Any:
             required_threads=int(spec["threads"]),
         )
         item = _select_item(plan, str(spec["case_id"]))
-        original = runtime_module._algorithm_outcome_free
-        runtime_module._algorithm_outcome_free = lambda case_id: _algorithm_from_transfer(
-            alias, case_id
+        binding = runtime_module.preflight_plan_binding(
+            item["queue_item_id"],
+            plan_record=plan,
+            environment_record=environment,
         )
-        try:
-            return runtime_module.build_queue_bound_runtime_v2(
-                item["queue_item_id"],
-                plan_record=plan,
-                environment_record=environment,
-            )
-        finally:
-            runtime_module._algorithm_outcome_free = original
+        return _build_aic_context(alias, binding)
     import v5_final.parent_native_development_runtime_factory_v1 as runtime_module
 
     plan, environment = project_plan_to_aic_runtime(
@@ -93,18 +88,12 @@ def build_context(alias: str) -> Any:
         required_threads=int(spec["threads"]),
     )
     item = _select_item(plan, str(spec["case_id"]))
-    original = runtime_module._algorithm_outcome_free
-    runtime_module._algorithm_outcome_free = lambda case_id: _algorithm_from_transfer(
-        alias, case_id
+    binding = runtime_module.preflight_development_binding_v1(
+        item["queue_item_id"],
+        plan_record=plan,
+        environment_record=environment,
     )
-    try:
-        return runtime_module.build_queue_bound_development_runtime_v1(
-            item["queue_item_id"],
-            plan_record=plan,
-            environment_record=environment,
-        )
-    finally:
-        runtime_module._algorithm_outcome_free = original
+    return _build_aic_context(alias, binding)
 
 
 def _algorithm_from_transfer(alias: str, case_id: str) -> tuple[Any, Any]:
@@ -171,6 +160,97 @@ def _algorithm_from_transfer(alias: str, case_id: str) -> tuple[Any, Any]:
     algorithm.hamiltonian = transferred_hamiltonian
     algorithm.energy_meas = algorithm.observable_to_measurement(transferred_hamiltonian)
     return algorithm, pool
+
+
+def _build_aic_context(alias: str, binding: Any) -> Any:
+    """Rebuild an audited same-node CPU reference without weakening production.
+
+    The production factories require a byte-identical macOS sparse-state hash.
+    Cross-platform P3 instead applies the pre-frozen numerical state tolerance
+    to a same-node Qiskit CPU/Aer-GPU pair while retaining exact Hamiltonian,
+    circuit, resource, state-preparation and candidate identities.
+    """
+
+    from qiskit.quantum_info import Statevector
+    from dvg_obs_ceo.molecular_identity import problem_spec, state_preparation_spec
+    from dvg_obs_ceo.resources import (
+        AnsatzStructure,
+        evaluate_full_circuit_resources,
+        paper_era_backend,
+    )
+    from dvg_obs_ceo.telemetry import WorkCounters
+    from dvg_obs_ceo.transaction import CompressionRuntime
+    from v5_final.parent_native_runtime_factory import _resource_vector
+
+    item = binding.queue_item
+    case = binding.catalog_case
+    checkpoint = binding.checkpoint
+    algorithm, pool = _algorithm_from_transfer(alias, str(item["case_id"]))
+    problem = problem_spec(algorithm=algorithm, case_id=str(item["case_id"]))
+    if (
+        problem.problem_id != item["ProblemID"]
+        or problem.hamiltonian_digest != item["Hamiltonian_digest"]
+        or problem.payload() != case["problem_payload"]
+    ):
+        raise A100PilotError("transferred molecular problem identity differs")
+    structure = AnsatzStructure.create(
+        checkpoint["ansatz_indices"],
+        checkpoint["ansatz_coefficients"],
+        checkpoint["iteration_counts"],
+    )
+    resources = evaluate_full_circuit_resources(pool, structure, paper_era_backend())
+    resource_vector = _resource_vector(resources)
+    if resource_vector != case["source_resources"]:
+        raise A100PilotError("transferred source resources differ")
+    registry_source = getattr(binding, "registry_source", None)
+    if registry_source is not None and resources.snapshot.structure_digest != registry_source[
+        "resources"
+    ]["structure_digest"]:
+        raise A100PilotError("transferred source structure digest differs")
+
+    circuit = pool.get_circuit(list(structure.indices), list(structure.coefficients))
+    reference = np.asarray(algorithm.ref_state.toarray(), dtype=np.complex128).ravel()
+    state = np.asarray(Statevector(reference).evolve(circuit).data, dtype=np.complex128)
+    state /= np.linalg.norm(state)
+    runtime = CompressionRuntime.create(
+        ansatz=structure,
+        energy_hartree=float(checkpoint["energy_hartree"]),
+        gradient=checkpoint["gradient"],
+        inverse_hessian=checkpoint["recycled_inverse_hessian"],
+        statevector=state,
+        work=WorkCounters(),
+        adapt_iteration=int(
+            checkpoint.get(
+                "adapt_iteration", len(structure.cumulative_parameter_counts)
+            )
+        ),
+        metadata={
+            "resource_structure_digest": resources.snapshot.structure_digest,
+            "source_checkpoint_digest": checkpoint["checkpoint_digest"],
+            "ProblemID": problem.problem_id,
+            "aic_same_node_cpu_reference": True,
+        },
+    )
+    preparation = state_preparation_spec(runtime, algorithm=algorithm, pool=pool)
+    if (
+        preparation.state_preparation_id != item["StatePreparationID"]
+        or preparation.payload() != case["state_preparation_payload"]
+    ):
+        raise A100PilotError("transferred source preparation differs")
+    return SimpleNamespace(
+        queue_item_id=str(item["queue_item_id"]),
+        case_id=str(item["case_id"]),
+        plan_digest=str(binding.plan_digest),
+        environment_digest=str(binding.environment_digest),
+        source_checkpoint_digest=str(checkpoint["checkpoint_digest"]),
+        problem_id=problem.problem_id,
+        hamiltonian_digest=problem.hamiltonian_digest,
+        state_preparation_id=preparation.state_preparation_id,
+        source_resources=resource_vector,
+        pool=pool,
+        runtime=runtime,
+        _actual_algorithm=algorithm,
+    )
 
 
 def project_plan_to_aic_runtime(
@@ -314,8 +394,6 @@ def run_case(alias: str) -> dict[str, Any]:
 
     cpu_state = np.asarray(context.runtime.statevector, dtype=np.complex128).ravel()
     cpu_sha = hashlib.sha256(np.asarray(cpu_state, dtype=">c16").tobytes()).hexdigest()
-    if cpu_sha != expected["statevector_sha256"]:
-        raise A100PilotError("reconstructed CPU source state digest differs")
     reference = np.asarray(algorithm.ref_state.toarray(), dtype=np.complex128).ravel()
     circuit = context.pool.get_circuit(indices, coefficients)
     if hashlib.sha256(circuit.qasm().encode("utf-8")).hexdigest() != expected["source_qasm_sha256"]:
@@ -329,6 +407,7 @@ def run_case(alias: str) -> dict[str, Any]:
         raise A100PilotError("physical resource vector differs")
 
     counters = RouteCounters()
+    counters.N_cpu_statevector += 1
     backend = build_gpu_backend()
     gpu_state, metadata = gpu_statevector(
         reference, circuit, backend=backend, counters=counters
@@ -397,6 +476,10 @@ def run_case(alias: str) -> dict[str, Any]:
             "ProblemID": expected["ProblemID"],
             "Hamiltonian_digest": expected["Hamiltonian_digest"],
             "statevector_sha256_cpu": cpu_sha,
+            "statevector_sha256_frozen_mac_cpu": expected["statevector_sha256"],
+            "frozen_mac_state_digest_reproduced_on_aic_cpu": (
+                cpu_sha == expected["statevector_sha256"]
+            ),
             "candidate_order_digest": candidate_order_digest,
             "aic_projected_environment_digest": context.environment_digest,
             "aic_projected_plan_digest": context.plan_digest,
@@ -407,6 +490,18 @@ def run_case(alias: str) -> dict[str, Any]:
         "optimizer_runs": 0,
         "FCI_evaluations": 0,
         "performance_claim_authorized": False,
+        "reference_scope": {
+            "state": "same-AIC-node Qiskit CPU versus Aer GPU under frozen numerical tolerance",
+            "energy_and_gradient": "frozen P0 macOS CPU values",
+            "exact_identities": [
+                "Hamiltonian_digest",
+                "ProblemID",
+                "StatePreparationID",
+                "source_qasm_sha256",
+                "candidate_order_digest",
+                "physical_resources",
+            ],
+        },
     }
 
 
