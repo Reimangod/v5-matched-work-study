@@ -226,6 +226,8 @@ def _build_aic_context(alias: str, binding: Any) -> Any:
         ),
         metadata={
             "resource_structure_digest": resources.snapshot.structure_digest,
+            "budget_reference_energy_hartree": float(checkpoint["energy_hartree"]),
+            "queue_item_id": str(item["queue_item_id"]),
             "source_checkpoint_digest": checkpoint["checkpoint_digest"],
             "ProblemID": problem.problem_id,
             "aic_same_node_cpu_reference": True,
