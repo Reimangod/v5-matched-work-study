@@ -31,7 +31,14 @@ from .aer_gpu_backend import (
     hybrid_gpu_state_cpu_sparse_energy,
     phase_aligned_max_error,
 )
-from .common import A100PilotError, digest, load_json
+from .common import (
+    ARTIFACT_ROOT,
+    A100PilotError,
+    digest,
+    embedded_digest_valid,
+    load_json,
+    sha256_file,
+)
 from .p0_baseline import (
     CALIBRATION_PLAN,
     CASE_SPECS,
@@ -39,6 +46,12 @@ from .p0_baseline import (
     PROTOCOL,
     REFERENCE,
     _select_item,
+)
+
+
+TRANSFER_MANIFEST = (
+    ARTIFACT_ROOT
+    / "p2-source-transfer/outcome-free-molecular-integral-bundle-v1.json"
 )
 
 
@@ -51,38 +64,91 @@ def build_context(alias: str) -> Any:
         raise A100PilotError(f"unknown frozen alias: {alias}")
     spec = CASE_SPECS[alias]
     if spec["plan"] == "calibration":
-        from v5_final.parent_native_runtime_factory_v2 import (
-            ENVIRONMENT_PATH,
-            build_queue_bound_runtime_v2,
-        )
+        import v5_final.parent_native_runtime_factory_v2 as runtime_module
 
         plan, environment = project_plan_to_aic_runtime(
             load_json(CALIBRATION_PLAN),
-            load_json(ENVIRONMENT_PATH),
+            load_json(runtime_module.ENVIRONMENT_PATH),
             required_threads=int(spec["threads"]),
         )
         item = _select_item(plan, str(spec["case_id"]))
-        return build_queue_bound_runtime_v2(
+        original = runtime_module._algorithm_outcome_free
+        runtime_module._algorithm_outcome_free = lambda case_id: _algorithm_from_transfer(
+            alias, case_id
+        )
+        try:
+            return runtime_module.build_queue_bound_runtime_v2(
+                item["queue_item_id"],
+                plan_record=plan,
+                environment_record=environment,
+            )
+        finally:
+            runtime_module._algorithm_outcome_free = original
+    import v5_final.parent_native_development_runtime_factory_v1 as runtime_module
+
+    plan, environment = project_plan_to_aic_runtime(
+        load_json(DEVELOPMENT_PLAN),
+        load_json(runtime_module.ENVIRONMENT_PATH),
+        required_threads=int(spec["threads"]),
+    )
+    item = _select_item(plan, str(spec["case_id"]))
+    original = runtime_module._algorithm_outcome_free
+    runtime_module._algorithm_outcome_free = lambda case_id: _algorithm_from_transfer(
+        alias, case_id
+    )
+    try:
+        return runtime_module.build_queue_bound_development_runtime_v1(
             item["queue_item_id"],
             plan_record=plan,
             environment_record=environment,
         )
-    from v5_final.parent_native_development_runtime_factory_v1 import (
-        ENVIRONMENT_PATH,
-        build_queue_bound_development_runtime_v1,
-    )
+    finally:
+        runtime_module._algorithm_outcome_free = original
 
-    plan, environment = project_plan_to_aic_runtime(
-        load_json(DEVELOPMENT_PLAN),
-        load_json(ENVIRONMENT_PATH),
-        required_threads=int(spec["threads"]),
+
+def _algorithm_from_transfer(alias: str, case_id: str) -> tuple[Any, Any]:
+    """Build the pinned CEO kernel from the exact P0 integral transfer."""
+
+    from openfermion import MolecularData
+    from dvg_obs_ceo.baseline import _load_upstream
+
+    manifest = load_json(TRANSFER_MANIFEST)
+    if not embedded_digest_valid(manifest, "bundle_digest"):
+        raise A100PilotError("P2 integral transfer manifest digest is invalid")
+    matches = [case for case in manifest["cases"] if case["alias"] == alias]
+    if len(matches) != 1 or matches[0]["case_id"] != case_id:
+        raise A100PilotError("P2 integral transfer case binding differs")
+    record = matches[0]
+    path = (ARTIFACT_ROOT.parent.parent / str(record["path"])).resolve()
+    if sha256_file(path) != record["sha256"]:
+        raise A100PilotError("P2 integral transfer file SHA-256 differs")
+    molecule = MolecularData(filename=str(path.with_suffix("")))
+    molecule.load()
+    if molecule.fci_energy is not None or molecule.ccsd_energy is not None:
+        raise A100PilotError("FCI/CCSD outcome entered transferred molecule")
+    LinAlgAdapt, DVG_CEO, _, _ = _load_upstream()
+    pool = DVG_CEO(molecule)
+    is_calibration = alias == "h2"
+    thresholds = {"beh2": 1e-5}
+    algorithm = LinAlgAdapt(
+        pool=pool,
+        molecule=molecule,
+        verbose=False,
+        max_adapt_iter=12 if is_calibration else 100,
+        max_opt_iter=10000,
+        full_opt=True,
+        threshold=float(thresholds.get(alias, 1e-6)),
+        convergence_criterion="total_g_norm",
+        tetris=True,
+        progressive_opt=False,
+        candidates=1,
+        sel_criterion="gradient",
+        recycle_hessian=True,
+        penalize_cnots=False,
+        rand_degenerate=False,
+        shots=None,
     )
-    item = _select_item(plan, str(spec["case_id"]))
-    return build_queue_bound_development_runtime_v1(
-        item["queue_item_id"],
-        plan_record=plan,
-        environment_record=environment,
-    )
+    return algorithm, pool
 
 
 def project_plan_to_aic_runtime(

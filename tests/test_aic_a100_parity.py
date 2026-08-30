@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from aic_a100_pilot.aer_gpu_backend import phase_aligned_max_error
-from aic_a100_pilot.common import ROOT, digest, load_json
+from aic_a100_pilot.common import ROOT, digest, embedded_digest_valid, load_json
 from aic_a100_pilot.p0_baseline import CALIBRATION_PLAN
 from aic_a100_pilot.parity import _from_float_hex, project_plan_to_aic_runtime
 
@@ -47,3 +47,19 @@ def test_aic_projection_is_additive_and_content_addressed(monkeypatch):
         item["environment_digest"] == environment["environment_digest"]
         for item in projected["items"]
     )
+
+
+def test_integral_transfer_is_outcome_free_and_matches_all_p0_digests():
+    transfer = load_json(
+        ROOT
+        / "artifacts/aic-a100-pilot-v1/p2-source-transfer/"
+        "outcome-free-molecular-integral-bundle-v1.json"
+    )
+    reference = load_json(
+        ROOT / "artifacts/aic-a100-pilot-v1/p0-baseline/cpu-reference-bundle-v1.json"
+    )
+    assert embedded_digest_valid(transfer, "bundle_digest")
+    assert transfer["case_order"] == ["h2", "h4", "lih", "h6", "beh2"]
+    expected = {case["alias"]: case["Hamiltonian_digest"] for case in reference["cases"]}
+    assert {case["alias"]: case["Hamiltonian_digest"] for case in transfer["cases"]} == expected
+    assert all(case["FCI_energy"] is None and case["CCSD_energy"] is None for case in transfer["cases"])
