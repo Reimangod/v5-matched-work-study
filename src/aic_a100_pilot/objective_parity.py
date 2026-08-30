@@ -100,6 +100,9 @@ def _boundary_classes() -> tuple[Any, Any, Any]:
         ) -> np.ndarray:
             value = super().independent_statevector(coordinates, indices)
             self.routes.N_cpu_statevector += 1
+            self.last_independent_statevector = np.asarray(
+                value, dtype=np.complex128
+            ).copy()
             return value
 
         def independent_energy(self, statevector: np.ndarray) -> float:
@@ -427,6 +430,11 @@ def run_case(alias: str) -> dict[str, Any]:
     if len(captured_cpu) != 1:
         raise A100PilotError("production CPU helper did not construct one boundary")
     counted_cpu = captured_cpu[0]
+    cpu_independent_state = getattr(
+        counted_cpu, "last_independent_statevector", None
+    )
+    if cpu_independent_state is None:
+        raise A100PilotError("production CPU helper did not expose its counted state")
 
     gpu_boundary = PilotBoundary()
     gpu_kernels = gpu_class(
@@ -474,7 +482,7 @@ def run_case(alias: str) -> dict[str, Any]:
             and len(cpu["gradient"]) == len(gpu["gradient"])
         ),
         "state": phase_aligned_max_error(
-            cpu_raw["independent_statevector"], gpu_raw["independent_statevector"]
+            cpu_independent_state, gpu_raw["independent_statevector"]
         )
         <= 1e-10,
         "explicit_GPU_metadata": bool(gpu_kernels.metadata)
@@ -513,7 +521,7 @@ def run_case(alias: str) -> dict[str, Any]:
                 default=0.0,
             ),
             "phase_aligned_independent_state": phase_aligned_max_error(
-                cpu_raw["independent_statevector"], gpu_raw["independent_statevector"]
+                cpu_independent_state, gpu_raw["independent_statevector"]
             ),
         },
         "wall_time_seconds": {
