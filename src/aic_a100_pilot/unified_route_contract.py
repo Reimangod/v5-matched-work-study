@@ -23,9 +23,17 @@ CONTRACT_V1 = (
     ARTIFACT_ROOT
     / "p3-unified-route-v1/unified-route-trajectory-contract-v1.json"
 )
-CONTRACT = (
+CONTRACT_V2 = (
     ARTIFACT_ROOT
     / "p3-unified-route-v2/unified-route-trajectory-contract-v2.json"
+)
+CONTRACT = (
+    ARTIFACT_ROOT
+    / "p3-unified-route-v3/unified-route-trajectory-contract-v3.json"
+)
+V2_PREOUTCOME_INCIDENT = (
+    ARTIFACT_ROOT
+    / "p3-unified-route-v2/runtime-metadata-incident-job2004-v1.json"
 )
 HYBRID_REPORT = (
     ARTIFACT_ROOT
@@ -71,19 +79,23 @@ def contract_body() -> dict[str, Any]:
         raise RuntimeError(f"unified-route implementation is incomplete: {missing}")
     tolerances = protocol["tolerances"]
     return {
-        "schema": "aic-a100-pilot.unified-route-trajectory-contract.v2",
+        "schema": "aic-a100-pilot.unified-route-trajectory-contract.v3",
         "status": "GO_BOUNDED_UNIFIED_ROUTE_TRAJECTORY_PARITY",
         "frozen_before_new_unified_route_candidate_outcomes": True,
         "pre_outcome_correction": {
             "superseded_contract": _binding(
-                CONTRACT_V1, embedded_field="contract_digest"
+                CONTRACT_V2, embedded_field="contract_digest"
             ),
-            "new_unified_route_candidate_outcomes_before_v2_freeze": 0,
+            "predecessor_incident": _binding(
+                V2_PREOUTCOME_INCIDENT, embedded_field="incident_digest"
+            ),
+            "new_unified_route_candidate_outcomes_before_v3_freeze": 0,
             "reason": (
-                "v1 bound source hashes but did not require each result to carry "
-                "its exact Git, submodule, and software runtime identity"
+                "v2 requested a distribution named qiskit although the pinned AIC "
+                "environment exposes the importable version under qiskit-terra or "
+                "module metadata"
             ),
-            "v1_remains_immutable": True,
+            "v1_and_v2_remain_immutable": True,
         },
         "immutable_predecessor_no_go": {
             "preserved_without_mutation": True,
@@ -141,6 +153,10 @@ def contract_body() -> dict[str, Any]:
             "result_runtime_identity": (
                 "exact Git HEAD, expected HEAD, submodule HEADs, contract file SHA, "
                 "source SHAs, Python, NumPy, SciPy, Qiskit, and Qiskit Aer"
+            ),
+            "software_version_resolution": (
+                "registered distribution candidates in order, followed by the "
+                "imported module __version__; fail closed if neither exists"
             ),
         },
         "optimizer_contract": {

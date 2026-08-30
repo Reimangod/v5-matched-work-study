@@ -26,9 +26,11 @@ from aic_a100_pilot.unified_route import (
 from aic_a100_pilot.unified_route_contract import (
     CONTRACT,
     CONTRACT_V1,
+    CONTRACT_V2,
     HYBRID_REPORT,
     SOURCE_PATHS,
     TERMINAL_NO_GO,
+    V2_PREOUTCOME_INCIDENT,
     contract_body,
 )
 
@@ -42,6 +44,9 @@ EXPECTED_TERMINAL_NO_GO_SHA256 = (
 EXPECTED_UNIFIED_V1_SHA256 = (
     "0a3fc81eb48fc0cc8af2792f211e2c06cd73bccc2059072e66c340f0a0aa8e36"
 )
+EXPECTED_UNIFIED_V2_SHA256 = (
+    "7fd8a8e160e59d6c6eb6b40007b2b4b9f370249ab8e4cc7287d4a48bef6e6037"
+)
 
 
 def _float_hex(value: float) -> str:
@@ -50,7 +55,7 @@ def _float_hex(value: float) -> str:
 
 def test_unified_contract_preserves_no_go_and_freezes_one_route():
     value = contract_body()
-    assert value["schema"].endswith(".v2")
+    assert value["schema"].endswith(".v3")
     assert value["status"] == "GO_BOUNDED_UNIFIED_ROUTE_TRAJECTORY_PARITY"
     assert value["frozen_before_new_unified_route_candidate_outcomes"] is True
     assert sha256_file(HYBRID_REPORT) == EXPECTED_HYBRID_REPORT_SHA256
@@ -63,11 +68,16 @@ def test_unified_contract_preserves_no_go_and_freezes_one_route():
     )
     correction = value["pre_outcome_correction"]
     assert sha256_file(CONTRACT_V1) == EXPECTED_UNIFIED_V1_SHA256
-    assert correction["superseded_contract"]["sha256"] == (
-        EXPECTED_UNIFIED_V1_SHA256
+    assert sha256_file(CONTRACT_V2) == EXPECTED_UNIFIED_V2_SHA256
+    assert correction["superseded_contract"]["sha256"] == EXPECTED_UNIFIED_V2_SHA256
+    assert correction["new_unified_route_candidate_outcomes_before_v3_freeze"] == 0
+    assert correction["v1_and_v2_remain_immutable"] is True
+    incident = load_json(V2_PREOUTCOME_INCIDENT)
+    assert embedded_digest_valid(incident, "incident_digest")
+    assert incident["status"] == (
+        "PRE_OUTCOME_ENGINEERING_INCIDENT_QISKIT_METADATA_UNAVAILABLE"
     )
-    assert correction["new_unified_route_candidate_outcomes_before_v2_freeze"] == 0
-    assert correction["v1_remains_immutable"] is True
+    assert incident["outcome_boundary"]["candidate_energy_evaluations"] == 0
     route = value["route_contract"]
     assert route["CPU_analytic_gradient_used"] is False
     assert route["finite_difference_step_float64_hex"] == _float_hex(1e-4)
@@ -136,8 +146,12 @@ def test_runtime_binding_records_exact_commit_submodules_and_versions(monkeypatc
         "numpy",
         "scipy",
         "qiskit",
-        "qiskit-aer",
+        "qiskit_aer",
     }
+    assert all(
+        set(record) == {"module", "version", "source"}
+        for record in value["distributions"].values()
+    )
     assert len(value["parent_submodule_head"]) == 40
     assert len(value["CEO_submodule_head"]) == 40
 

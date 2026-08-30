@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import asdict, dataclass
 import hashlib
+from importlib import import_module
 from importlib import metadata as importlib_metadata
 import json
 import os
@@ -47,6 +48,34 @@ STENCIL = (-2, -1, 1, 2)
 FINITE_DIFFERENCE_STEP = np.float64(1e-4)
 
 
+def _software_version(
+    module_name: str, distribution_candidates: Sequence[str]
+) -> dict[str, str]:
+    for distribution in distribution_candidates:
+        try:
+            version = importlib_metadata.version(distribution)
+        except importlib_metadata.PackageNotFoundError:
+            continue
+        if not version:
+            raise A100PilotError(f"empty software version: {distribution}")
+        return {
+            "module": module_name,
+            "version": str(version),
+            "source": f"distribution:{distribution}",
+        }
+    module = import_module(module_name)
+    version = getattr(module, "__version__", None)
+    if not isinstance(version, str) or not version:
+        raise A100PilotError(
+            f"software version unavailable for importable module: {module_name}"
+        )
+    return {
+        "module": module_name,
+        "version": version,
+        "source": f"module:{module_name}.__version__",
+    }
+
+
 def _runtime_binding(contract: Mapping[str, Any]) -> dict[str, Any]:
     expected_head = os.environ.get("A100_EXPECTED_HEAD")
     if not expected_head or len(expected_head) != 40:
@@ -63,8 +92,12 @@ def _runtime_binding(contract: Mapping[str, Any]) -> dict[str, Any]:
     if observed_sources != contract["source_binding"]:
         raise A100PilotError("runtime unified-route source hashes differ from contract")
     versions = {
-        distribution: importlib_metadata.version(distribution)
-        for distribution in ("numpy", "scipy", "qiskit", "qiskit-aer")
+        "numpy": _software_version("numpy", ("numpy",)),
+        "scipy": _software_version("scipy", ("scipy",)),
+        "qiskit": _software_version("qiskit", ("qiskit", "qiskit-terra")),
+        "qiskit_aer": _software_version(
+            "qiskit_aer", ("qiskit-aer", "qiskit_aer")
+        ),
     }
     return {
         "git_head": actual_head,
@@ -737,7 +770,7 @@ def run_case(alias: str, *, output_dir: Path) -> dict[str, Any]:
         "no_CPU_fallback": gpu_kernel.counters.N_cpu_fallback == 0,
     }
     result = {
-        "schema": "aic-a100-pilot.unified-route-trajectory-case.v2",
+        "schema": "aic-a100-pilot.unified-route-trajectory-case.v3",
         "status": "PASS" if all(checks.values()) else "FAIL",
         "alias": alias,
         "case_id": specification["case_id"],
