@@ -16,7 +16,7 @@ test = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/v5_matched_work", "src/v5_final"]
+packages = ["src/v5_matched_work", "src/v5_final", "src/aic_a100_pilot"]
 
 [tool.pytest.ini_options]
 addopts = "-ra"
