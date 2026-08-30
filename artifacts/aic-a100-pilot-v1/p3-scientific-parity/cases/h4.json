@@ -1,0 +1,108 @@
+{
+  "FCI_evaluations": 0,
+  "alias": "h4",
+  "candidate_catalog_policy": {
+    "AIC_dynamic_rebuild_consumed": false,
+    "AIC_dynamic_rebuild_is_diagnostic_only": true,
+    "aic_rebuilt_candidate_count": 20,
+    "candidate_count": 20,
+    "operational_source": "P0_FROZEN_CPU_CATALOG_ORDER",
+    "reason": "Candidate generation remains a pinned CPU responsibility; the A100 pilot changes only statevector execution."
+  },
+  "candidate_molecular_energy_evaluations": 0,
+  "case_id": "h4-1.5-known-development",
+  "checks": {
+    "candidate_semantic_order": true,
+    "energy": true,
+    "explicit_gpu_metadata": true,
+    "gradient": true,
+    "no_cpu_fallback": true,
+    "resources": true,
+    "state": true
+  },
+  "errors": {
+    "absolute_energy_hartree": 6.661338147750939e-16,
+    "max_gradient_component": 4.297812106201956e-12,
+    "phase_aligned_state_max_abs": 4.106555644862734e-16
+  },
+  "gradient_validation": {
+    "method": "five-point-central-finite-difference-of-GPU-statevector-energy",
+    "optimizer_binding": "VALIDATION_ONLY_NOT_USED_BY_OPTIMIZER",
+    "production_optimizer_gradient": "PINNED_CEO_ANALYTIC_GRADIENT_UNCHANGED",
+    "step": 0.0001
+  },
+  "identity": {
+    "Hamiltonian_digest": "d34322dc8c4b42ba3016d7b75a077047d64396510c40bdf99cdd79958f5ccecb",
+    "ProblemID": "problem-v1:f5f8d7ed5471fc044924e7c8c7e49e5989a0bfe35f467f2612a55e810124edfd",
+    "StatePreparationID": "state-v1:5180413cb3aaa7a83a88ea6d8b76ffce7c8f282b81a9226d582c060348b97eb7",
+    "aic_projected_environment_digest": "ef66a54cf4c09a4c115678dbd533b8c2427be65034aa642febca06fc1abc6930",
+    "aic_projected_plan_digest": "e79c327cdb2786840c4789b1d573187b16a4116485069b84ac865e689f4e013a",
+    "aic_rebuilt_candidate_order_digest": "d42d833829ed22c2b6f95a7bc13c8d79f63f12f44c44963fe422e6f53f7919df",
+    "aic_rebuilt_candidate_order_matches_frozen": true,
+    "candidate_order_digest": "d42d833829ed22c2b6f95a7bc13c8d79f63f12f44c44963fe422e6f53f7919df",
+    "frozen_mac_state_digest_reproduced_on_aic_cpu": false,
+    "statevector_sha256_cpu": "ea5058139594a6cde1158e57a957f3c4008926f1ccc0ef35e906e632850a1a76",
+    "statevector_sha256_frozen_mac_cpu": "3c6a593ef053aca403a2e4d0a733e44f824bad60c5863801e7c52130d32c9d3c"
+  },
+  "optimizer_runs": 0,
+  "performance_claim_authorized": false,
+  "qubit_count": 8,
+  "reference_scope": {
+    "energy_and_gradient": "frozen P0 macOS CPU values",
+    "exact_identities": [
+      "Hamiltonian_digest",
+      "ProblemID",
+      "StatePreparationID",
+      "source_qasm_sha256",
+      "candidate_order_digest",
+      "physical_resources"
+    ],
+    "state": "same-AIC-node Qiskit CPU versus Aer GPU under frozen numerical tolerance"
+  },
+  "resources": {
+    "cnot_count": 80,
+    "cnot_depth": 34,
+    "logical_block_count": 8,
+    "parameter_count": 10,
+    "total_depth": 126
+  },
+  "route_counters": {
+    "N_cpu_energy": 41,
+    "N_cpu_fallback": 0,
+    "N_cpu_gradient_component": 0,
+    "N_cpu_statevector": 1,
+    "N_gpu_energy": 41,
+    "N_gpu_gradient_component": 10,
+    "N_gpu_statevector": 41
+  },
+  "schema": "aic-a100-pilot.p3-case-parity.v1",
+  "status": "PASS",
+  "values": {
+    "cpu_energy_hartree": -1.9949017237736966,
+    "cpu_gradient": [
+      2.0813550882792242e-10,
+      -1.9412495083637182e-09,
+      -8.057432717995666e-10,
+      -6.3780222075982e-10,
+      -9.971104766512418e-10,
+      3.975397747102427e-09,
+      -1.5452580109584502e-09,
+      1.4987484048961663e-09,
+      8.766641579338597e-10,
+      -1.0886145179744844e-09
+    ],
+    "gpu_energy_hartree": -1.994901723773696,
+    "gpu_validation_gradient": [
+      2.0668651975104996e-10,
+      -1.9449257019725033e-09,
+      -8.075022132440305e-10,
+      -6.365278674517564e-10,
+      -9.995707965041825e-10,
+      3.9745984281580604e-09,
+      -1.5461705989613013e-09,
+      1.497875897390107e-09,
+      8.809619700400616e-10,
+      -1.0906090845234453e-09
+    ]
+  }
+}
