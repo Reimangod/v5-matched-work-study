@@ -11,11 +11,15 @@ to the pinned analytic CEO* gradient and is not changed here.
 from __future__ import annotations
 
 import argparse
+from copy import deepcopy
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
+import platform
 import struct
+import sys
 from typing import Any, Sequence
 
 import numpy as np
@@ -47,20 +51,96 @@ def build_context(alias: str) -> Any:
         raise A100PilotError(f"unknown frozen alias: {alias}")
     spec = CASE_SPECS[alias]
     if spec["plan"] == "calibration":
-        from v5_final.parent_native_runtime_factory_v2 import build_queue_bound_runtime_v2
+        from v5_final.parent_native_runtime_factory_v2 import (
+            ENVIRONMENT_PATH,
+            build_queue_bound_runtime_v2,
+        )
 
-        plan = load_json(CALIBRATION_PLAN)
+        plan, environment = project_plan_to_aic_runtime(
+            load_json(CALIBRATION_PLAN),
+            load_json(ENVIRONMENT_PATH),
+            required_threads=int(spec["threads"]),
+        )
         item = _select_item(plan, str(spec["case_id"]))
-        return build_queue_bound_runtime_v2(item["queue_item_id"], plan_record=plan)
+        return build_queue_bound_runtime_v2(
+            item["queue_item_id"],
+            plan_record=plan,
+            environment_record=environment,
+        )
     from v5_final.parent_native_development_runtime_factory_v1 import (
+        ENVIRONMENT_PATH,
         build_queue_bound_development_runtime_v1,
     )
 
-    plan = load_json(DEVELOPMENT_PLAN)
+    plan, environment = project_plan_to_aic_runtime(
+        load_json(DEVELOPMENT_PLAN),
+        load_json(ENVIRONMENT_PATH),
+        required_threads=int(spec["threads"]),
+    )
     item = _select_item(plan, str(spec["case_id"]))
     return build_queue_bound_development_runtime_v1(
-        item["queue_item_id"], plan_record=plan
+        item["queue_item_id"],
+        plan_record=plan,
+        environment_record=environment,
     )
+
+
+def project_plan_to_aic_runtime(
+    source_plan: dict[str, Any],
+    source_environment: dict[str, Any],
+    *,
+    required_threads: int,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Create an in-memory, outcome-free OS projection for the A100 pilot.
+
+    Production artifacts remain byte-immutable.  Only platform identity and
+    required thread values change; molecular, checkpoint, method and candidate
+    fields are retained.  Queue IDs and plan digest are recomputed because they
+    are content-addressed to the projected environment.
+    """
+
+    environment = deepcopy(source_environment)
+    old_environment_digest = str(environment.pop("environment_digest"))
+    environment["runtime"] = {
+        "byte_order": sys.byteorder,
+        "machine": platform.machine().lower(),
+        "python_implementation": platform.python_implementation().lower(),
+        "python_version": platform.python_version(),
+        "system": platform.system().lower(),
+    }
+    environment["required_threads"] = {
+        key: str(required_threads)
+        for key in ("MKL_NUM_THREADS", "OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS")
+    }
+    environment["aic_pilot_projection"] = {
+        "source_environment_digest": old_environment_digest,
+        "allowed_changes": ["runtime", "required_threads"],
+        "production_artifact_changed": False,
+        "scientific_source_changed": False,
+    }
+    environment["environment_digest"] = digest(environment)
+
+    plan = deepcopy(source_plan)
+    schema = str(plan["schema"])
+    if schema.endswith("mb6-h2-h4-calibration-plan.v4"):
+        prefix = "mb6-calibration-item-v4:"
+    elif schema == "v5-final.s11-development-plan.v4":
+        prefix = "development-queue-item-v4:"
+    else:
+        raise A100PilotError(f"unregistered plan projection schema: {schema}")
+    plan.pop("plan_digest", None)
+    plan["environment_digest"] = environment["environment_digest"]
+    plan["aic_pilot_projection"] = {
+        "source_plan_digest": source_plan["plan_digest"],
+        "source_environment_digest": old_environment_digest,
+        "production_artifact_changed": False,
+    }
+    for item in plan["items"]:
+        item["environment_digest"] = environment["environment_digest"]
+        item.pop("queue_item_id", None)
+        item["queue_item_id"] = prefix + digest(item)
+    plan["plan_digest"] = digest(plan)
+    return plan, environment
 
 
 def _reference_case(alias: str) -> dict[str, Any]:
@@ -230,6 +310,8 @@ def run_case(alias: str) -> dict[str, Any]:
             "Hamiltonian_digest": expected["Hamiltonian_digest"],
             "statevector_sha256_cpu": cpu_sha,
             "candidate_order_digest": candidate_order_digest,
+            "aic_projected_environment_digest": context.environment_digest,
+            "aic_projected_plan_digest": context.plan_digest,
         },
         "resources": expected["resources"],
         "route_counters": counters.as_dict(),
