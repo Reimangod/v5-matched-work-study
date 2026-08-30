@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import subprocess
 import time
 from typing import Any
@@ -94,34 +95,118 @@ def _visibility() -> dict[str, Any]:
     )
 
 
+def _history_contains_sensitive_blob() -> bool:
+    object_lines = _git(
+        "rev-list",
+        "--objects",
+        "--all",
+        "--",
+        ".",
+        ":(exclude)src/v5_final/s0_public_amendment.py",
+    ).splitlines()
+    object_ids = list(dict.fromkeys(line.split(" ", 1)[0] for line in object_lines))
+    if not object_ids:
+        raise RuntimeError("credential-pattern history scan found no objects")
+
+    batch_input = "\n".join(object_ids) + "\n"
+    types = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(ROOT),
+            "cat-file",
+            "--batch-check=%(objectname) %(objecttype)",
+        ],
+        input=batch_input,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if types.returncode != 0:
+        raise RuntimeError("credential-pattern object-type scan failed")
+    blob_ids = [
+        object_id
+        for object_id, object_type in (
+            line.split() for line in types.stdout.splitlines()
+        )
+        if object_type == "blob"
+    ]
+    if not blob_ids:
+        raise RuntimeError("credential-pattern history scan found no blobs")
+
+    blobs = subprocess.run(
+        ["git", "-C", str(ROOT), "cat-file", "--batch"],
+        input=("\n".join(blob_ids) + "\n").encode(),
+        capture_output=True,
+        check=False,
+    )
+    if blobs.returncode != 0:
+        raise RuntimeError("credential-pattern blob-content scan failed")
+    patterns = tuple(
+        re.compile(pattern.encode("ascii")) for pattern in SENSITIVE_PATTERNS
+    )
+    offset = 0
+    parsed_blobs = 0
+    while offset < len(blobs.stdout):
+        header_end = blobs.stdout.find(b"\n", offset)
+        if header_end < 0:
+            raise RuntimeError("credential-pattern blob batch has a truncated header")
+        header = blobs.stdout[offset:header_end].split()
+        if len(header) != 3 or header[1] != b"blob":
+            raise RuntimeError("credential-pattern blob batch has an invalid header")
+        size = int(header[2])
+        content_start = header_end + 1
+        content_end = content_start + size
+        if (
+            content_end >= len(blobs.stdout)
+            or blobs.stdout[content_end : content_end + 1] != b"\n"
+        ):
+            raise RuntimeError("credential-pattern blob batch has truncated content")
+        content = blobs.stdout[content_start:content_end]
+        # Match git-grep -I's text-file policy: a NUL byte in the initial
+        # buffer classifies the blob as binary and excludes it from scanning.
+        if b"\0" not in content[:8000] and any(
+            pattern.search(content) for pattern in patterns
+        ):
+            return True
+        parsed_blobs += 1
+        offset = content_end + 1
+    if parsed_blobs != len(blob_ids):
+        raise RuntimeError("credential-pattern blob batch count mismatch")
+    return False
+
+
 def _history_sensitive_path_matches() -> list[dict[str, str]]:
+    # Scan each unique reachable file content once. Only the exceptional
+    # detection path pays for per-tree git-grep calls to recover exact paths.
+    if not _history_contains_sensitive_blob():
+        return []
+
     matches: set[tuple[str, str]] = set()
-    for commit in _git("rev-list", "--all").splitlines():
-        for pattern in SENSITIVE_PATTERNS:
-            process = subprocess.run(
-                [
-                    "git",
-                    "-C",
-                    str(ROOT),
-                    "grep",
-                    "-I",
-                    "-l",
-                    "-E",
-                    "-e",
-                    pattern,
-                    commit,
-                    "--",
-                    ":(exclude)src/v5_final/s0_public_amendment.py",
-                ],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            if process.returncode not in {0, 1}:
-                raise RuntimeError("credential-pattern history scan failed")
-            for line in process.stdout.splitlines():
-                _, path = line.split(":", 1)
-                matches.add((pattern, path))
+    commits = _git("rev-list", "--all").splitlines()
+    if not commits:
+        raise RuntimeError("credential-pattern history scan found no commits")
+    base_command = ["git", "-C", str(ROOT), "grep", "-I", "-l", "-E"]
+    pathspec = ["--", ":(exclude)src/v5_final/s0_public_amendment.py"]
+
+    for pattern in SENSITIVE_PATTERNS:
+        process = subprocess.run(
+            [
+                *base_command,
+                "-e",
+                pattern,
+                *commits,
+                *pathspec,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if process.returncode not in {0, 1}:
+            raise RuntimeError("credential-pattern history scan failed")
+        for line in process.stdout.splitlines():
+            _, path = line.split(":", 1)
+            matches.add((pattern, path))
     return [
         {"pattern_class": pattern, "path": path}
         for pattern, path in sorted(matches)

@@ -63,3 +63,46 @@ def test_visibility_fails_closed_after_exact_attempt_bound(monkeypatch) -> None:
     assert len(calls) == 4
     assert '"attempt": 4' in str(error.value)
     assert '"http_status": null' in str(error.value)
+
+
+def test_history_scan_skips_tree_rescan_when_unique_blobs_are_clean(monkeypatch) -> None:
+    from v5_final import s0_public_amendment as subject
+
+    monkeypatch.setattr(subject, "_history_contains_sensitive_blob", lambda: False)
+    monkeypatch.setattr(
+        subject.subprocess,
+        "run",
+        lambda *args, **kwargs: pytest.fail("clean blob scan must not rescan trees"),
+    )
+    assert subject._history_sensitive_path_matches() == []
+
+
+@pytest.mark.parametrize(
+    ("content", "expected"),
+    [(b"ordinary text", False), (b"sk-" + b"a" * 20, True)],
+)
+def test_unique_blob_scan_detects_registered_pattern(
+    monkeypatch, content, expected
+) -> None:
+    from v5_final import s0_public_amendment as subject
+
+    monkeypatch.setattr(subject, "_git", lambda *arguments: "a" * 40 + " path.txt")
+    responses = [
+        SimpleNamespace(returncode=0, stdout="a" * 40 + " blob\n", stderr=""),
+        SimpleNamespace(
+            returncode=0,
+            stdout=(
+                b"a" * 40
+                + b" blob "
+                + str(len(content)).encode()
+                + b"\n"
+                + content
+                + b"\n"
+            ),
+            stderr=b"",
+        ),
+    ]
+    monkeypatch.setattr(
+        subject.subprocess, "run", lambda *args, **kwargs: responses.pop(0)
+    )
+    assert subject._history_contains_sensitive_blob() is expected

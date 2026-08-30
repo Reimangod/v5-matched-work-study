@@ -1,0 +1,231 @@
+{
+  "P3_objective_contract_digest": "5d43add26c825c41cbee382978106a0da2dd40816440a2dabe7bd00c3f2b6fe8",
+  "alias": "lih",
+  "candidate_id": "candidate-v1:6e3542457a8537def3d6ea4355418bfcd934cbebb23c9ef1609996fa3d959202",
+  "case_id": "lih-3.0",
+  "checks": {
+    "GPU_objective_was_invoked": true,
+    "candidate_ids_exact": true,
+    "cpu_gpu_acceptance_checks": true,
+    "cpu_gpu_terminal_decision": true,
+    "cpu_matches_frozen_terminal_decision": true,
+    "energy": true,
+    "explicit_GPU_metadata": true,
+    "gpu_matches_frozen_terminal_decision": true,
+    "gradient": false,
+    "independent_energy": true,
+    "no_CPU_fallback": true,
+    "resources_exact": true,
+    "state": false
+  },
+  "composition_candidate_ids": [
+    "candidate-v1:6e3542457a8537def3d6ea4355418bfcd934cbebb23c9ef1609996fa3d959202"
+  ],
+  "cpu": {
+    "acceptance_checks": {
+      "constraint": true,
+      "cumulative_energy_budget": true,
+      "finite": true,
+      "independent_energy_agreement": true,
+      "independent_state_fidelity": true,
+      "kkt": false,
+      "optimizer_path_reviewed": false,
+      "pareto_nonworse": true,
+      "physical_scalar_domain": true,
+      "resource_improved": true,
+      "resource_policy_valid": true,
+      "resource_recount": true,
+      "transformation_semantics": true
+    },
+    "acceptance_rejection_reasons": [
+      "kkt",
+      "optimizer_path_reviewed"
+    ],
+    "energy_hartree": -7.797909682466665,
+    "gradient": [
+      -3.4129676862448832e-09,
+      -1.1505704965815086e-08,
+      -2.2449783506345337e-09,
+      1.9972177754939285e-09,
+      7.695404464681653e-09,
+      1.4266924540735557e-08,
+      2.6904024280297716e-09,
+      -2.958270884321289e-09,
+      -4.047607772198316e-09,
+      -3.442462092126606e-09,
+      1.3717425736605655e-09,
+      7.5312227954803e-10,
+      1.3417096692040525e-08,
+      1.7762903091556655e-09
+    ],
+    "gradient_infinity_norm": 1.4266924540735557e-08,
+    "independent_energy_hartree": -7.797909682466663,
+    "optimizer_terminal": {
+      "energy_evaluations_reported": 79,
+      "gradient_evaluations_reported": 68,
+      "iterations": 15,
+      "message": "Desired error not necessarily achieved due to precision loss.",
+      "status": 2,
+      "success": false
+    },
+    "parameters": [
+      -0.1882071965410615,
+      -0.002217210729989506,
+      -0.274101961779842,
+      -0.0025228897717661067,
+      -0.0014641062362036061,
+      0.2243326504316774,
+      -0.05781561004025178,
+      -0.27457592159625366,
+      -0.0014375684782341788,
+      -0.7854076872261613,
+      -0.1377378163865231,
+      0.296670447129518,
+      0.0016210602307431808,
+      -0.0021142549374175913
+    ],
+    "resources": {
+      "cnot_count": 98,
+      "cnot_depth": 30,
+      "counter_version": "paper-era-full-circuit-resource-v1:paper-era-qasm-counter-a3f89d0",
+      "logical_block_count": 14,
+      "parameter_count": 14,
+      "structure_digest": "bbc35a4f22ddccfcf1ba9cb7a8f9e711e5bd645fdba5010253b6a16d8e28aa03",
+      "total_depth": 158
+    },
+    "state_fidelity": 1.0000000000000004,
+    "terminal_decision": "REJECTED"
+  },
+  "differences": {
+    "energy_hartree": 9.281464485866309e-13,
+    "independent_energy_hartree": 9.263700917472306e-13,
+    "max_gradient_component": 6.477491232688323e-08,
+    "phase_aligned_independent_state": 8.262475027238231e-07
+  },
+  "gpu": {
+    "acceptance_checks": {
+      "constraint": true,
+      "cumulative_energy_budget": true,
+      "finite": true,
+      "independent_energy_agreement": true,
+      "independent_state_fidelity": true,
+      "kkt": false,
+      "optimizer_path_reviewed": false,
+      "pareto_nonworse": true,
+      "physical_scalar_domain": true,
+      "resource_improved": true,
+      "resource_policy_valid": true,
+      "resource_recount": true,
+      "transformation_semantics": true
+    },
+    "acceptance_rejection_reasons": [
+      "kkt",
+      "optimizer_path_reviewed"
+    ],
+    "energy_hartree": -7.797909682465737,
+    "gradient": [
+      -2.951894284564105e-09,
+      3.2771707066808764e-08,
+      1.3307515131235781e-08,
+      4.564295611386368e-09,
+      7.751525068044317e-09,
+      -3.1472236070831557e-08,
+      -7.182451051681886e-09,
+      -5.196036163256059e-09,
+      1.8730737014909828e-08,
+      2.3280517984565055e-08,
+      -7.301981106166162e-09,
+      1.6850823411164844e-09,
+      -5.1357815634842703e-08,
+      7.052651269974277e-09
+    ],
+    "gradient_infinity_norm": 5.1357815634842703e-08,
+    "independent_energy_hartree": -7.797909682465737,
+    "optimizer_terminal": {
+      "energy_evaluations_reported": 51,
+      "gradient_evaluations_reported": 39,
+      "iterations": 0,
+      "message": "Desired error not necessarily achieved due to precision loss.",
+      "status": 2,
+      "success": false
+    },
+    "parameters": [
+      -0.18820718203441475,
+      -0.0022172065962058193,
+      -0.2741019612559356,
+      -0.002522889546034059,
+      -0.0014391679408967302,
+      0.22433258238378032,
+      -0.0578157255078106,
+      -0.27457591428829303,
+      -0.0014375661732793537,
+      -0.7853336272033455,
+      -0.13773782348658997,
+      0.29667049919368127,
+      0.0016210452836948053,
+      -0.002114254131218714
+    ],
+    "resources": {
+      "cnot_count": 98,
+      "cnot_depth": 30,
+      "counter_version": "paper-era-full-circuit-resource-v1:paper-era-qasm-counter-a3f89d0",
+      "logical_block_count": 14,
+      "parameter_count": 14,
+      "structure_digest": "bbc35a4f22ddccfcf1ba9cb7a8f9e711e5bd645fdba5010253b6a16d8e28aa03",
+      "total_depth": 158
+    },
+    "state_fidelity": 1.0000000000000009,
+    "terminal_decision": "REJECTED"
+  },
+  "hardware": {
+    "gpu": {
+      "CUDA_VISIBLE_DEVICES_count": 1,
+      "cuda_driver_device_count": 1,
+      "driver_version": "570.195.03",
+      "memory_total_mib": 81920,
+      "model": "NVIDIA A100-SXM4-80GB",
+      "nvidia_smi_management_visible_count": 3,
+      "scope_explanation": "nvidia-smi reports node-management inventory; the Slurm selectors and CUDA driver inside the job expose exactly the one allocated A100.",
+      "slurm_job_gpu_count": 1
+    },
+    "node": "dgx-a100",
+    "slurm_job_id": 1997
+  },
+  "optimizer_terminal_exact_fields_equal": false,
+  "record_digest": "7d08c4b91c9c1f1709bf9a36b3e3bebd317ec10a86df327340b58d3d3c13e20e",
+  "reference_class": "approximate",
+  "route_counters": {
+    "cpu": {
+      "N_cpu_energy": 80,
+      "N_cpu_fallback": 0,
+      "N_cpu_gradient_component": 952,
+      "N_cpu_statevector": 81,
+      "N_gpu_energy": 0,
+      "N_gpu_gradient_component": 0,
+      "N_gpu_statevector": 0
+    },
+    "gpu": {
+      "N_cpu_energy": 52,
+      "N_cpu_fallback": 0,
+      "N_cpu_gradient_component": 546,
+      "N_cpu_statevector": 1,
+      "N_gpu_energy": 52,
+      "N_gpu_gradient_component": 0,
+      "N_gpu_statevector": 52
+    }
+  },
+  "schema": "aic-a100-pilot.p3-production-objective-case-parity.v1",
+  "scientific_boundary": {
+    "FCI_evaluations": 0,
+    "P5_limited_scientific_pilot": "NOT_AUTHORIZED",
+    "V5_performance_claim": "NOT_AUTHORIZED",
+    "new_GPU_candidate_outcomes": 1,
+    "new_paired_CPU_candidate_outcomes": 1
+  },
+  "status": "FAIL",
+  "wall_time_seconds": {
+    "GPU_objective_adapter": 8.509500385960564,
+    "counted_CPU_reconciliation_excluded": true,
+    "production_CPU_helper": 12.84430782101117
+  }
+}
