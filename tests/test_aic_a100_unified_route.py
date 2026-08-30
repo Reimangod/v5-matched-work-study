@@ -51,6 +51,12 @@ EXPECTED_UNIFIED_V2_SHA256 = (
 EXPECTED_UNIFIED_V3_SHA256 = (
     "9bd572614af0f9415894fb0a642963803c90d0bb5365fcec2736875a8322b8d6"
 )
+H2_RESULT = (
+    CONTRACT.parents[1] / "p3-unified-route-v4/results/h2.json"
+)
+H2_PREPARATION = (
+    CONTRACT.parents[1] / "p3-unified-route-v4/preparation-manifests/h2.json"
+)
 
 
 def _float_hex(value: float) -> str:
@@ -256,3 +262,28 @@ def test_predecessor_gate_is_additive_and_fail_closed(tmp_path: Path):
     )
     with pytest.raises(A100PilotError, match="did not pass"):
         _require_predecessors("h4", tmp_path)
+
+
+def test_h2_unified_route_is_a_zero_dimensional_parity_pass():
+    result = load_json(H2_RESULT)
+    preparation = load_json(H2_PREPARATION)
+    assert embedded_digest_valid(result, "record_digest")
+    assert embedded_digest_valid(preparation, "manifest_digest")
+    assert result["schema"].endswith(".v4")
+    assert result["status"] == "PASS"
+    assert result["alias"] == "h2"
+    assert result["contract_digest"] == load_json(CONTRACT)["contract_digest"]
+    assert all(result["checks"].values())
+    assert result["trajectory"] == {
+        "iterations": [],
+        "length_cpu": 0,
+        "length_gpu": 0,
+    }
+    assert set(result["terminal_differences"].values()) == {0.0}
+    assert result["route_counters"]["cpu"] == {
+        **result["route_counters"]["gpu"],
+        "device": "CPU",
+    }
+    assert result["route_counters"]["gpu"]["N_cpu_fallback"] == 0
+    assert result["scientific_boundary"]["FCI_evaluations"] == 0
+    assert preparation["candidate_outcomes"] == 0
