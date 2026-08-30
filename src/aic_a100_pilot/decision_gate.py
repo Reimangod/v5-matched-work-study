@@ -6,14 +6,28 @@ import argparse
 import json
 from typing import Any
 
-from .common import ARTIFACT_ROOT, embedded_digest_valid, load_json, publish
+from .common import (
+    ARTIFACT_ROOT,
+    embedded_digest_valid,
+    load_json,
+    publish,
+    tree_inventory_digest,
+)
 from .environment import PREFLIGHT
-from .p0_baseline import CANDIDATE_REFERENCE, PROTOCOL, REFERENCE
+from .p0_baseline import (
+    CANDIDATE_REFERENCE,
+    PROTECTED_ROOTS,
+    PROTOCOL,
+    REFERENCE,
+)
+from .p3_objective_report import REPORT as OBJECTIVE_REPORT
+from .p4_report import REPORT as SOURCE_ROUTE_REPORT
 
 
 P6 = ARTIFACT_ROOT / "p6-decision"
 DECISION = P6 / "a100-pilot-terminal-decision-v1.json"
 DECISION_V2 = P6 / "a100-pilot-terminal-decision-v2.json"
+DECISION_V3 = P6 / "a100-pilot-terminal-decision-v3.json"
 
 
 def decision_body() -> dict[str, Any]:
@@ -167,18 +181,107 @@ def publish_reference_complete_decision() -> dict[str, Any]:
     return publish(DECISION_V2, reference_complete_decision_body(), "decision_digest")
 
 
+def numerical_nonparity_decision_body() -> dict[str, Any]:
+    protocol = load_json(PROTOCOL)
+    prior = load_json(DECISION_V2)
+    objective = load_json(OBJECTIVE_REPORT)
+    source_route = load_json(SOURCE_ROUTE_REPORT)
+    if not embedded_digest_valid(protocol, "protocol_digest"):
+        raise RuntimeError("P0 protocol digest is invalid")
+    if not embedded_digest_valid(prior, "decision_digest"):
+        raise RuntimeError("P6 v2 decision digest is invalid")
+    if not embedded_digest_valid(objective, "report_digest"):
+        raise RuntimeError("P3 objective report digest is invalid")
+    if not embedded_digest_valid(source_route, "report_digest"):
+        raise RuntimeError("P4 source-route report digest is invalid")
+    if objective["status"] != "NO_GO_A100_NUMERICAL_NONPARITY":
+        raise RuntimeError("P3 objective parity is not the registered terminal No-Go")
+    observed = tree_inventory_digest(PROTECTED_ROOTS)
+    protected_unchanged = observed == protocol["protected_artifact_snapshot"]
+    if not protected_unchanged:
+        raise RuntimeError("protected S11/S12 artifacts changed during A100 pilot")
+    return {
+        "schema": "aic-a100-pilot.terminal-decision.v3",
+        "status": "NO_GO_A100_NUMERICAL_NONPARITY",
+        "terminal_phase": "P6_AFTER_BOUNDED_P3_PRODUCTION_OBJECTIVE_PARITY",
+        "supersedes_without_mutation": {
+            "path": DECISION_V2.relative_to(ARTIFACT_ROOT.parent.parent).as_posix(),
+            "decision_digest": prior["decision_digest"],
+            "historical_operational_no_go_retained": True,
+            "P1_operational_recovery_retained": True,
+        },
+        "evidence_binding": {
+            "P0_protocol_digest": protocol["protocol_digest"],
+            "P3_objective_report_digest": objective["report_digest"],
+            "P4_source_route_diagnostic_report_digest": source_route[
+                "report_digest"
+            ],
+        },
+        "phase_status": {
+            "P0_LOCAL_CPU_REFERENCE": "GO",
+            "P1_AIC_PREFLIGHT": "GO_BY_ADDITIVE_RECOVERY",
+            "P2_GPU_ENVIRONMENT_AND_SMOKE": "GO",
+            "P3_FIXED_COORDINATE_SOURCE_PARITY": "GO",
+            "P4_SOURCE_ROUTE_DIAGNOSTIC": "GO_PRECHECK_ONLY",
+            "P3_PRODUCTION_OBJECTIVE_PARITY": "NO_GO_LIH_NUMERICAL_NONPARITY",
+            "P4_COMPLETE_ITEM_END_TO_END": "NOT_EXECUTED_NOT_AUTHORIZED",
+            "P5_LIMITED_SCIENTIFIC_PILOT": "NOT_EXECUTED_NOT_AUTHORIZED",
+            "P6_FORMAL_DECISION": "TERMINAL",
+        },
+        "parity_table": objective["case_results"],
+        "source_route_speedup_table": source_route["current_system_results"],
+        "source_route_speedup_scope": (
+            "Diagnostic statevector-plus-host-expectation timings; not complete-item "
+            "end-to-end acceleration evidence."
+        ),
+        "terminal_failure": objective["terminal_failure"],
+        "route_counters": objective["route_counters_persisted_results"],
+        "work_disclosure": objective["work_disclosure"],
+        "protected_scientific_artifacts": {
+            "unchanged": protected_unchanged,
+            "snapshot": observed,
+        },
+        "scientific_boundaries": {
+            **dict(objective["scientific_boundary"]),
+            "FCI_evaluations": 0,
+            "full_90_item_rerun": "NOT_EXECUTED",
+            "A100_adoption_for_current_matched_work": "NOT_AUTHORIZED",
+        },
+        "safe_reentry_conditions": [
+            "Do not relax the frozen state or gradient tolerance using this outcome.",
+            "A new route must be preregistered as a distinct study before new GPU candidate outcomes.",
+            "Potential alternatives include CPU-only matched work or a mathematically identical batched GPU formulation with separately frozen parity rules.",
+            "Retain all source-route timings, the H2 serialization incident, and the LiH failure.",
+        ],
+    }
+
+
+def publish_numerical_nonparity_decision() -> dict[str, Any]:
+    return publish(DECISION_V3, numerical_nonparity_decision_body(), "decision_digest")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--publish", action="store_true")
     parser.add_argument("--publish-reference-complete-v2", action="store_true")
+    parser.add_argument("--publish-numerical-nonparity-v3", action="store_true")
     arguments = parser.parse_args()
-    if arguments.publish == arguments.publish_reference_complete_v2:
-        raise RuntimeError("select exactly one publication action")
-    value = (
-        publish_decision()
-        if arguments.publish
-        else publish_reference_complete_decision()
+    selected = sum(
+        bool(value)
+        for value in (
+            arguments.publish,
+            arguments.publish_reference_complete_v2,
+            arguments.publish_numerical_nonparity_v3,
+        )
     )
+    if selected != 1:
+        raise RuntimeError("select exactly one publication action")
+    if arguments.publish:
+        value = publish_decision()
+    elif arguments.publish_reference_complete_v2:
+        value = publish_reference_complete_decision()
+    else:
+        value = publish_numerical_nonparity_decision()
     print(json.dumps(value, indent=2, sort_keys=True))
 
 
