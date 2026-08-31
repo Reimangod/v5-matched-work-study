@@ -1,0 +1,43 @@
+name: AIC A100 stable-control v2 post-failure closure gate
+
+on:
+  push:
+    branches:
+      - infra/aic-a100-stable-control-v2-postfailure-diagnostic
+
+permissions:
+  contents: read
+
+jobs:
+  stable-control-v2-postfailure-closure:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EXACT_SHA: ${{ github.sha }}
+      PYTHONPATH: ${{ github.workspace }}/src:${{ github.workspace }}/provenance/dvg-obs-ceo/src:${{ github.workspace }}/provenance/dvg-obs-ceo/vendor/ceo-adapt-vqe
+    steps:
+      - name: Checkout exact commit and recursive provenance
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_SHA }}
+          submodules: recursive
+          fetch-depth: 0
+      - name: Require checkout to equal requested exact commit
+        run: test "$(git rev-parse HEAD)" = "$EXACT_SHA"
+      - name: Set up pinned Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10.19"
+      - name: Set up pinned uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.9.8"
+          enable-cache: true
+      - name: Sync pinned scientific and test environment
+        working-directory: provenance/dvg-obs-ceo
+        run: uv sync --frozen --extra baseline --extra test
+      - name: Verify immutable H6 and BeH2 post-failure closure
+        run: >-
+          provenance/dvg-obs-ceo/.venv/bin/python -m pytest -q
+          tests/test_aic_a100_stable_control_v2_postfailure.py
+          tests/test_aic_a100_stable_control_v2_postfailure_closure.py
