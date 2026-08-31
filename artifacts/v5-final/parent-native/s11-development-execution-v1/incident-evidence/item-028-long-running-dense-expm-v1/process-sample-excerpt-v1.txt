@@ -1,0 +1,22 @@
+Source: macOS /usr/bin/sample, PID 86211, 2 seconds, 1 millisecond interval
+Sample time: 2026-08-15 01:45:28.131 +0900
+Launch time: 2026-08-13 14:30:08.306 +0900
+OS: macOS 26.0.1 (25A362), ARM64
+Physical footprint: 3.4 GiB
+Peak physical footprint: 3.9 GiB
+Raw temporary sample SHA-256: 32e83fb40e0d9a67d0abc0d2ed8cd6b9b02d3b07021440d47179fa4456020303
+
+Observed main-thread call-chain excerpt:
+
+python3.10
+  Py_RunMain
+    pymain_run_module
+      Python evaluation frames
+        scipy.linalg._matfuncs_expm.pick_pade_structure
+          OpenBLAS zgemm
+            zgemm_nn
+              ARMV8 complex matrix multiplication kernels
+
+All 1,565 sampled main-thread observations were inside pick_pade_structure / zgemm. This is direct evidence that the process was actively computing a dense matrix exponential rather than sleeping or waiting on I/O.
+
+This file is a deliberately minimal, non-secret excerpt. It excludes the full binary-image inventory and user-home path expansion from the raw diagnostic while retaining the causal stack evidence.

@@ -1,0 +1,87 @@
+name: V5 release gate
+
+on:
+  pull_request:
+  push:
+    tags:
+      - "**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-gate:
+    name: release-gate
+    runs-on: ubuntu-24.04
+    # The exact frozen-contract suite requires about 170 minutes on the
+    # reference workload.  Keep the complete suite intact and give it a
+    # bounded window that can actually finish.
+    timeout-minutes: 240
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXACT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      OMP_NUM_THREADS: "2"
+      OPENBLAS_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
+      PYTHONPATH: ${{ github.workspace }}/src:${{ github.workspace }}/provenance/dvg-obs-ceo/src:${{ github.workspace }}/provenance/dvg-obs-ceo/vendor/ceo-adapt-vqe
+
+    steps:
+      - name: Checkout exact commit and recursive provenance
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_SHA }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Require checkout to equal requested exact commit
+        run: test "$(git rev-parse HEAD)" = "$EXACT_SHA"
+
+      - name: Fetch recursive provenance tags
+        run: git submodule foreach --recursive 'git fetch --force --tags origin'
+
+      - name: Set up pinned Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10.19"
+
+      - name: Set up pinned uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.9.8"
+          enable-cache: true
+
+      - name: Sync study audit environment
+        run: uv sync --frozen --extra test
+
+      - name: Sync pinned parent baseline environment
+        working-directory: provenance/dvg-obs-ceo
+        run: uv sync --frozen --extra baseline
+
+      - name: Run every test under its frozen thread contract
+        run: >-
+          provenance/dvg-obs-ceo/.venv/bin/python -m
+          v5_final.full_repository_suite_v2
+
+      - name: Audit the latest additive P7 decision
+        run: |
+          if test -f artifacts/v5-final/parent-native/s11-v2-preexecution-gate-v5/p7-go-v5.json; then
+            provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s11_v2_preexecution_gate_v5 --audit
+          else
+            provenance/dvg-obs-ceo/.venv/bin/python -m v5_final.s11_v2_preexecution_gate_v4 --audit
+          fi
+
+      - name: Record exact commit and submodules
+        run: |
+          git rev-parse HEAD > exact-commit.txt
+          git submodule status --recursive > exact-submodules.txt
+
+      - name: Upload external CI attestation
+        uses: actions/upload-artifact@v4
+        with:
+          name: v5-release-gate-${{ env.EXACT_SHA }}
+          path: |
+            exact-commit.txt
+            exact-submodules.txt
+          if-no-files-found: error
+          retention-days: 90

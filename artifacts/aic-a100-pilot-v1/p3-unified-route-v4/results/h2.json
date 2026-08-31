@@ -1,0 +1,238 @@
+{
+  "alias": "h2",
+  "candidate_id": "candidate-v1:af0740814cc72ea8ee4a395118e9feaa5be6ee0ca2865ae630806645a0a0b4a8",
+  "case_id": "h2-1.5-iteration-1",
+  "checks": {
+    "candidate_ids_exact": true,
+    "explicit_device_metadata": true,
+    "no_CPU_fallback": true,
+    "operation_kind_and_stencil_order": true,
+    "optimizer_terminal_counts_and_status": true,
+    "predecessor_prefix_passed": true,
+    "resources_exact": true,
+    "same_device_repeat_determinism": true,
+    "terminal_decision": true,
+    "terminal_energy": true,
+    "terminal_gradient": true,
+    "terminal_state": true,
+    "trajectory_iteration_parity": true,
+    "trajectory_length": true
+  },
+  "contract_digest": "01caafd87138b17154d250c33cf09d86d1b9428aff64e31484a51c7b3abc417d",
+  "cpu": {
+    "acceptance_checks": {
+      "constraint": true,
+      "cumulative_energy_budget": false,
+      "finite": true,
+      "independent_energy_agreement": true,
+      "independent_state_fidelity": true,
+      "kkt": true,
+      "optimizer_path_reviewed": true,
+      "pareto_nonworse": true,
+      "physical_scalar_domain": true,
+      "resource_improved": true,
+      "resource_policy_valid": true,
+      "resource_recount": true,
+      "transformation_semantics": true
+    },
+    "acceptance_rejection_reasons": [
+      "cumulative_energy_budget"
+    ],
+    "energy_hartree": -0.9108735545943865,
+    "gradient": [],
+    "gradient_infinity_norm": 0.0,
+    "independent_energy_hartree": -0.9108735545943865,
+    "optimizer_terminal": {
+      "energy_evaluations_reported": 1,
+      "gradient_evaluations_reported": 0,
+      "iterations": 0,
+      "message": "zero-dimensional unified-route evaluation",
+      "status": 0,
+      "success": true
+    },
+    "parameters": [],
+    "resources": {
+      "cnot_count": 0,
+      "cnot_depth": 0,
+      "counter_version": "paper-era-full-circuit-resource-v1:paper-era-qasm-counter-a3f89d0",
+      "logical_block_count": 0,
+      "parameter_count": 0,
+      "structure_digest": "5c56262591e02329197510000ab5fb95e66e26202218a7098bc7049dfe66ebcb",
+      "total_depth": 0
+    },
+    "state_fidelity": 1.0,
+    "terminal_decision": "REJECTED"
+  },
+  "determinism_probe": {
+    "cpu": {
+      "energy_bitwise_equal": true,
+      "energy_float64": "bfed25e04bf8c5ec",
+      "state_bitwise_equal": true,
+      "state_sha256": "82a67551ee09543241e5313b74d9b3ad34707429cb8ada79f39c7901a83724a6"
+    },
+    "gpu": {
+      "energy_bitwise_equal": true,
+      "energy_float64": "bfed25e04bf8c5ec",
+      "state_bitwise_equal": true,
+      "state_sha256": "82a67551ee09543241e5313b74d9b3ad34707429cb8ada79f39c7901a83724a6"
+    }
+  },
+  "gpu": {
+    "acceptance_checks": {
+      "constraint": true,
+      "cumulative_energy_budget": false,
+      "finite": true,
+      "independent_energy_agreement": true,
+      "independent_state_fidelity": true,
+      "kkt": true,
+      "optimizer_path_reviewed": true,
+      "pareto_nonworse": true,
+      "physical_scalar_domain": true,
+      "resource_improved": true,
+      "resource_policy_valid": true,
+      "resource_recount": true,
+      "transformation_semantics": true
+    },
+    "acceptance_rejection_reasons": [
+      "cumulative_energy_budget"
+    ],
+    "energy_hartree": -0.9108735545943865,
+    "gradient": [],
+    "gradient_infinity_norm": 0.0,
+    "independent_energy_hartree": -0.9108735545943865,
+    "optimizer_terminal": {
+      "energy_evaluations_reported": 1,
+      "gradient_evaluations_reported": 0,
+      "iterations": 0,
+      "message": "zero-dimensional unified-route evaluation",
+      "status": 0,
+      "success": true
+    },
+    "parameters": [],
+    "resources": {
+      "cnot_count": 0,
+      "cnot_depth": 0,
+      "counter_version": "paper-era-full-circuit-resource-v1:paper-era-qasm-counter-a3f89d0",
+      "logical_block_count": 0,
+      "parameter_count": 0,
+      "structure_digest": "5c56262591e02329197510000ab5fb95e66e26202218a7098bc7049dfe66ebcb",
+      "total_depth": 0
+    },
+    "state_fidelity": 1.0,
+    "terminal_decision": "REJECTED"
+  },
+  "hardware": {
+    "gpu": {
+      "CUDA_VISIBLE_DEVICES_count": 1,
+      "cuda_driver_device_count": 1,
+      "driver_version": "570.195.03",
+      "memory_total_mib": 81920,
+      "model": "NVIDIA A100-SXM4-80GB",
+      "nvidia_smi_management_visible_count": 3,
+      "scope_explanation": "nvidia-smi reports node-management inventory; the Slurm selectors and CUDA driver inside the job expose exactly the one allocated A100.",
+      "slurm_job_gpu_count": 1
+    },
+    "node": "dgx-a100",
+    "slurm_job_id": 2006
+  },
+  "operation_order": {
+    "cpu_trace_digest": "4be32e730400b55b61d53b2c83c367465ce81f613761e819eb6e2cc99440eb22",
+    "exact_equal": true,
+    "gpu_trace_digest": "4be32e730400b55b61d53b2c83c367465ce81f613761e819eb6e2cc99440eb22",
+    "hamiltonian_digest": "46817393e27d7065197f7b4794cfbb8aed641664e4c9cef68708da28064efad3"
+  },
+  "predecessors": [],
+  "record_digest": "a2b1488761dd3eba2fceaa385e7c472f5fca22b83aa0773950f57e219cee7ed3",
+  "route_counters": {
+    "cpu": {
+      "N_cpu_fallback": 0,
+      "N_deterministic_energy": 4,
+      "N_device_statevector": 5,
+      "N_gradient_component": 0,
+      "device": "CPU"
+    },
+    "gpu": {
+      "N_cpu_fallback": 0,
+      "N_deterministic_energy": 4,
+      "N_device_statevector": 5,
+      "N_gradient_component": 0,
+      "device": "GPU"
+    }
+  },
+  "runtime_binding": {
+    "CEO_submodule_head": "a3f89d03e6a03c89767d3cf8ee7657a57653dda0",
+    "contract_digest": "01caafd87138b17154d250c33cf09d86d1b9428aff64e31484a51c7b3abc417d",
+    "contract_file_sha256": "0192e2e0362f74b9c6054fd361525c0ef9f52ec5b027c16ad73ed9a73c9414b4",
+    "contract_path": "artifacts/aic-a100-pilot-v1/p3-unified-route-v4/unified-route-trajectory-contract-v4.json",
+    "distributions": {
+      "numpy": {
+        "module": "numpy",
+        "source": "distribution:numpy",
+        "version": "1.23.5"
+      },
+      "qiskit": {
+        "module": "qiskit",
+        "source": "distribution:qiskit-terra",
+        "version": "0.24.2"
+      },
+      "qiskit_aer": {
+        "module": "qiskit_aer",
+        "source": "module:qiskit_aer.__version__",
+        "version": "0.12.2"
+      },
+      "scipy": {
+        "module": "scipy",
+        "source": "distribution:scipy",
+        "version": "1.10.1"
+      }
+    },
+    "expected_git_head": "491e2ec9b7016f8b2f8f2246ec01dc588864ee64",
+    "git_head": "491e2ec9b7016f8b2f8f2246ec01dc588864ee64",
+    "numerical_process_thread_environment": {
+      "MKL_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1"
+    },
+    "parent_submodule_head": "4783b9ff9f9b6f2061a1ef8c02613f4c6cef38db",
+    "python_version": "3.10.19",
+    "registered_numerical_thread_limit": 1,
+    "source_sha256": {
+      "scripts/aic/a100_unified_trajectory.sbatch": "8680182cee1a2fa4cad755b7e5f7bec16d103ba277bde96f9b6684e889a88181",
+      "src/aic_a100_pilot/unified_route.py": "9a4a45e5cfdfd1e172f484c8a6fd94b1aae9b5787066e35d92b553a305e48acd",
+      "src/aic_a100_pilot/unified_route_prepare.py": "87fc1e548fc8b3cf26d2ade1df7207ca20385eb74aa3c6f70f0e87dde6ccc474"
+    }
+  },
+  "schema": "aic-a100-pilot.unified-route-trajectory-case.v4",
+  "scientific_boundary": {
+    "FCI_evaluations": 0,
+    "V5_performance_claim": "NOT_AUTHORIZED",
+    "candidate_attempt_timing_recorded": false,
+    "complete_item_speed_claim": "NOT_AUTHORIZED_BY_CASE_PARITY",
+    "existing_90_item_execution": "UNCHANGED",
+    "new_GPU_candidate_outcomes": 1,
+    "new_paired_CPU_candidate_outcomes": 1
+  },
+  "source_preparation": {
+    "bundle_sha256": "7aaa58a6ffebcc07966ffc31eb36651306bc7cc538e5ad24be8b463b91ba0344",
+    "candidate_outcomes": 0,
+    "manifest_digest": "b1133cbd804a3868d15704114ed6b5c05425f4310685cb90651abc81a8c63bb6",
+    "separate_process": true
+  },
+  "status": "PASS",
+  "terminal_differences": {
+    "energy_hartree": 0.0,
+    "gradient_max_abs": 0.0,
+    "phase_aligned_state_max_abs": 0.0
+  },
+  "trajectory": {
+    "iterations": [],
+    "length_cpu": 0,
+    "length_gpu": 0
+  },
+  "trajectory_records": {
+    "cpu": [],
+    "gpu": []
+  }
+}

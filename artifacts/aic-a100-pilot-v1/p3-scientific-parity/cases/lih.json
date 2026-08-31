@@ -1,0 +1,118 @@
+{
+  "FCI_evaluations": 0,
+  "alias": "lih",
+  "candidate_catalog_policy": {
+    "AIC_dynamic_rebuild_consumed": false,
+    "AIC_dynamic_rebuild_is_diagnostic_only": true,
+    "aic_rebuilt_candidate_count": 15,
+    "candidate_count": 15,
+    "operational_source": "P0_FROZEN_CPU_CATALOG_ORDER",
+    "reason": "Candidate generation remains a pinned CPU responsibility; the A100 pilot changes only statevector execution."
+  },
+  "candidate_molecular_energy_evaluations": 0,
+  "case_id": "lih-3.0",
+  "checks": {
+    "candidate_semantic_order": true,
+    "energy": true,
+    "explicit_gpu_metadata": true,
+    "gradient": true,
+    "no_cpu_fallback": true,
+    "resources": true,
+    "state": true
+  },
+  "errors": {
+    "absolute_energy_hartree": 2.6645352591003757e-15,
+    "max_gradient_component": 2.0448147122621733e-11,
+    "phase_aligned_state_max_abs": 4.855242786854203e-16
+  },
+  "gradient_validation": {
+    "method": "five-point-central-finite-difference-of-GPU-statevector-energy",
+    "optimizer_binding": "VALIDATION_ONLY_NOT_USED_BY_OPTIMIZER",
+    "production_optimizer_gradient": "PINNED_CEO_ANALYTIC_GRADIENT_UNCHANGED",
+    "step": 0.0001
+  },
+  "identity": {
+    "Hamiltonian_digest": "f26e9d0617b9e577133e61c5fff9cb440b1ce16bb07c372b7e7c6a45daddf278",
+    "ProblemID": "problem-v1:f7ece52b3d2c22c1b893a4ed78719f594fc0cbc9adfde0c6764cbee2f92d6d06",
+    "StatePreparationID": "state-v1:7c53955d55dfeca40c96a4fdaaeadb1fc8dd7013830df95b912966920446531a",
+    "aic_projected_environment_digest": "ef66a54cf4c09a4c115678dbd533b8c2427be65034aa642febca06fc1abc6930",
+    "aic_projected_plan_digest": "e79c327cdb2786840c4789b1d573187b16a4116485069b84ac865e689f4e013a",
+    "aic_rebuilt_candidate_order_digest": "5ed2b35511975c387018892ac03c11820c2f9b549e5690e553621ebf5a64560d",
+    "aic_rebuilt_candidate_order_matches_frozen": true,
+    "candidate_order_digest": "5ed2b35511975c387018892ac03c11820c2f9b549e5690e553621ebf5a64560d",
+    "frozen_mac_state_digest_reproduced_on_aic_cpu": false,
+    "statevector_sha256_cpu": "9cc551e9508b9a4210a05e6d4ad410b115c98b48b7fcb1b80ceab3e8e3ff6c1b",
+    "statevector_sha256_frozen_mac_cpu": "127f801fff2c311b1cc4a32da6830f7311bfcebcabfbfd25b95d77211b87db03"
+  },
+  "optimizer_runs": 0,
+  "performance_claim_authorized": false,
+  "qubit_count": 12,
+  "reference_scope": {
+    "energy_and_gradient": "frozen P0 macOS CPU values",
+    "exact_identities": [
+      "Hamiltonian_digest",
+      "ProblemID",
+      "StatePreparationID",
+      "source_qasm_sha256",
+      "candidate_order_digest",
+      "physical_resources"
+    ],
+    "state": "same-AIC-node Qiskit CPU versus Aer GPU under frozen numerical tolerance"
+  },
+  "resources": {
+    "cnot_count": 107,
+    "cnot_depth": 30,
+    "logical_block_count": 15,
+    "parameter_count": 15,
+    "total_depth": 171
+  },
+  "route_counters": {
+    "N_cpu_energy": 61,
+    "N_cpu_fallback": 0,
+    "N_cpu_gradient_component": 0,
+    "N_cpu_statevector": 1,
+    "N_gpu_energy": 61,
+    "N_gpu_gradient_component": 15,
+    "N_gpu_statevector": 61
+  },
+  "schema": "aic-a100-pilot.p3-case-parity.v1",
+  "status": "PASS",
+  "values": {
+    "cpu_energy_hartree": -7.797909682469515,
+    "cpu_gradient": [
+      -2.3419839401128684e-09,
+      2.1949347532666114e-09,
+      2.283548786273048e-09,
+      7.919807251417083e-10,
+      7.745379952464461e-09,
+      -1.720445309257517e-09,
+      -2.3613752373378253e-10,
+      -2.492986455952518e-09,
+      -3.76432546826686e-09,
+      1.5272026441186899e-09,
+      4.814771503253452e-10,
+      -1.0959024658707023e-09,
+      2.239690584357799e-10,
+      -6.308052432046343e-09,
+      2.349077885181622e-09
+    ],
+    "gpu_energy_hartree": -7.797909682469518,
+    "gpu_validation_gradient": [
+      -2.337389541177496e-09,
+      2.1804780203638074e-09,
+      2.2692958623338196e-09,
+      7.978802803639458e-10,
+      7.72493180534184e-09,
+      -1.7230661342182427e-09,
+      -2.2722564570661535e-10,
+      -2.5017025488220193e-09,
+      -3.767356796894697e-09,
+      1.5261865845180485e-09,
+      4.907185768843192e-10,
+      -1.0887587128157368e-09,
+      2.1316282072803003e-10,
+      -6.2934842522584704e-09,
+      2.350712217472998e-09
+    ]
+  }
+}

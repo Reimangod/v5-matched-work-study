@@ -1,0 +1,55 @@
+name: V5 S11 cap precheck recovery gate
+
+on:
+  pull_request:
+  push:
+    branches: [main, agent/v5-parent-native-study-v1]
+
+jobs:
+  s11-cap-precheck-recovery-gate:
+    runs-on: ubuntu-latest
+    env:
+      EXACT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      PYTHONPATH: ${{ github.workspace }}/src:${{ github.workspace }}/provenance/dvg-obs-ceo/src:${{ github.workspace }}/provenance/dvg-obs-ceo/vendor/ceo-adapt-vqe
+    steps:
+      - name: Checkout exact commit and recursive provenance
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_SHA }}
+          fetch-depth: 0
+          submodules: recursive
+      - name: Require checkout to equal requested exact commit
+        run: test "$(git rev-parse HEAD)" = "$EXACT_SHA"
+      - name: Set up pinned Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10.19'
+      - name: Set up pinned uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.9.18'
+      - name: Sync pinned parent baseline environment
+        run: uv sync --project provenance/dvg-obs-ceo --locked --all-extras
+      - name: Run outcome-free cap-precheck recovery tests
+        run: uv run --project provenance/dvg-obs-ceo pytest -q tests/test_v5_final_s11_cap_precheck_recovery_v1.py
+      - name: Build exact static recovery report
+        run: uv run --project provenance/dvg-obs-ceo python -m v5_final.s11_cap_precheck_recovery_v1 --static-report-output "$RUNNER_TEMP/v5-s11-cap-precheck-recovery-static-ci-v1.json"
+      - name: Require recovery and claims to remain blocked
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          report = json.loads((Path(os.environ['RUNNER_TEMP']) / 'v5-s11-cap-precheck-recovery-static-ci-v1.json').read_text())
+          assert report['validated_exact_commit'] == os.environ['EXACT_SHA']
+          assert all(report['checks'].values())
+          assert report['authorization']['terminal_recovery'] == 'NOT_AUTHORIZED'
+          assert report['authorization']['molecular_kernel'] == 'NOT_AUTHORIZED'
+          assert report['authorization']['FCI_reporting'] == 'NOT_AUTHORIZED'
+          assert report['authorization']['performance_claim'] == 'NOT_AUTHORIZED'
+          PY
+      - name: Upload exact static recovery evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: v5-s11-cap-precheck-recovery-${{ env.EXACT_SHA }}
+          path: ${{ runner.temp }}/v5-s11-cap-precheck-recovery-static-ci-v1.json
+          if-no-files-found: error
