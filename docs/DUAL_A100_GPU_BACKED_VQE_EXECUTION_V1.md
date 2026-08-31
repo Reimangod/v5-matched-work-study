@@ -1,4 +1,4 @@
-# Dual-A100 GPU-backed VQE execution v2
+# Dual-A100 GPU-backed VQE execution v3
 
 ## Purpose
 
@@ -43,6 +43,13 @@ Slurm/cgroup GPU-index interpretation errors. No v1 result is eligible for a
 scientific or performance claim. V2 uses a new output namespace and never
 overwrites a v1 shard.
 
+V2 (Slurm 2049) produced one certified H2 PASS and rejected H6/BeH2 before
+their scientific kernel because management-visible `nvidia-smi` indices were
+not equivalent to the Slurm/cgroup execution-device index. V3 binds identity
+to the UUID returned by the CUDA driver for the process-visible logical device
+zero and separately requires that exactly one CUDA device is visible. The V2
+namespace remains immutable.
+
 ## Frozen dispatch
 
 ```text
@@ -63,7 +70,7 @@ untouched.
 
 ## GO conditions
 
-`GO_DUAL_A100_SCIENTIFIC_EXECUTION_V2` requires all of the following:
+`GO_DUAL_A100_SCIENTIFIC_EXECUTION_V3` requires all of the following:
 
 - all three task terminals and scientific results are present and digest-valid;
 - at least two task intervals overlap on different GPU UUID digests;

@@ -11,6 +11,7 @@ never a GO/No-Go criterion.
 from __future__ import annotations
 
 import argparse
+import ctypes
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -27,11 +28,11 @@ from .objective_parity import run_case
 
 
 CASES = ("h2", "h6", "beh2")
-STATUS_GO = "GO_DUAL_A100_SCIENTIFIC_EXECUTION_V2"
-STATUS_NO_GO = "NO_GO_DUAL_A100_EXECUTION_V2"
+STATUS_GO = "GO_DUAL_A100_SCIENTIFIC_EXECUTION_V3"
+STATUS_NO_GO = "NO_GO_DUAL_A100_EXECUTION_V3"
 CONTRACT = (
     Path(__file__).resolve().parents[2]
-    / "artifacts/aic-a100-dual-optimizer-v1/preexecution/contract-v2.json"
+    / "artifacts/aic-a100-dual-optimizer-v1/preexecution/contract-v3.json"
 )
 
 
@@ -101,17 +102,41 @@ def allocated_gpu_observation() -> dict[str, Any]:
                 "memory_total_mib": fields[4],
             }
         )
-    selected, identity_mode = _select_allocated_gpu(rows, allocated)
-    if "A100" not in selected["model"].upper():
-        raise A100PilotError(f"allocated device is not an A100: {selected['model']!r}")
+    driver = ctypes.CDLL("libcuda.so.1")
+    if int(driver.cuInit(0)) != 0:
+        raise A100PilotError("CUDA driver initialization failed")
+    count = ctypes.c_int()
+    if int(driver.cuDeviceGetCount(ctypes.byref(count))) != 0 or count.value != 1:
+        raise A100PilotError(
+            f"CUDA execution boundary must expose exactly one GPU: {count.value}"
+        )
+    device = ctypes.c_int()
+    if int(driver.cuDeviceGet(ctypes.byref(device), 0)) != 0:
+        raise A100PilotError("CUDA logical device zero is unavailable")
+    name_buffer = ctypes.create_string_buffer(256)
+    if int(driver.cuDeviceGetName(name_buffer, len(name_buffer), device)) != 0:
+        raise A100PilotError("CUDA device name query failed")
+    model = name_buffer.value.decode("utf-8", errors="strict")
+    if "A100" not in model.upper():
+        raise A100PilotError(f"CUDA execution device is not an A100: {model!r}")
+    uuid_buffer = (ctypes.c_ubyte * 16)()
+    uuid_function = getattr(driver, "cuDeviceGetUuid_v2", None) or getattr(
+        driver, "cuDeviceGetUuid", None
+    )
+    if uuid_function is None or int(uuid_function(ctypes.byref(uuid_buffer), device)) != 0:
+        raise A100PilotError("CUDA device UUID query failed")
+    management_models = sorted({row["model"] for row in rows})
+    management_drivers = sorted({row["driver_version"] for row in rows})
+    if any("A100" not in value.upper() for value in management_models):
+        raise A100PilotError("nvidia-smi management inventory contains a non-A100")
     return {
-        "model": selected["model"],
-        "driver_version": selected["driver_version"],
-        "memory_total_mib": int(selected["memory_total_mib"]),
-        "gpu_uuid_sha256": hashlib.sha256(selected["uuid"].encode("utf-8")).hexdigest(),
+        "model": model,
+        "management_driver_versions": management_drivers,
+        "gpu_uuid_sha256": hashlib.sha256(bytes(uuid_buffer)).hexdigest(),
         "CUDA_VISIBLE_DEVICES_count": 1,
         "SLURM_JOB_GPUS_count": 1,
-        "identity_resolution_mode": identity_mode,
+        "cuda_driver_visible_device_count": count.value,
+        "identity_resolution_mode": "CUDA_DRIVER_LOGICAL_DEVICE_UUID",
         "nvidia_smi_visible_gpu_count": len(rows),
         "CUDA_VISIBLE_DEVICES_token_sha256": hashlib.sha256(visible.encode("utf-8")).hexdigest(),
     }
@@ -161,7 +186,7 @@ def execute_task(alias: str, output_root: Path) -> dict[str, Any]:
     gpu = allocated_gpu_observation()
     started_ns = time.time_ns()
     start = {
-        "schema": "aic-a100-dual-optimizer.task-start.v2",
+        "schema": "aic-a100-dual-optimizer.task-start.v3",
         "alias": alias,
         "task_id": task_id,
         "task_count": task_count,
@@ -202,7 +227,7 @@ def execute_task(alias: str, output_root: Path) -> dict[str, Any]:
 
     ended_ns = time.time_ns()
     terminal = {
-        "schema": "aic-a100-dual-optimizer.task-terminal.v2",
+        "schema": "aic-a100-dual-optimizer.task-terminal.v3",
         "status": status,
         "failure_type": failure_type,
         "alias": alias,
@@ -302,7 +327,7 @@ def merge_shards(output_root: Path) -> dict[str, Any]:
     }
     status = STATUS_GO if all(checks.values()) else STATUS_NO_GO
     report = {
-        "schema": "aic-a100-dual-optimizer.merged-decision.v2",
+        "schema": "aic-a100-dual-optimizer.merged-decision.v3",
         "status": status,
         "checks": checks,
         "overlap_pairs": overlap_pairs,
