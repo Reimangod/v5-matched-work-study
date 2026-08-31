@@ -1,0 +1,38 @@
+{
+  "allowed_claim": "Two concurrent one-GPU Slurm tasks can execute the existing GPU-backed VQE objective and pass the registered CPU/GPU scientific certificate.",
+  "cases": [
+    "h2",
+    "h6",
+    "beh2"
+  ],
+  "contract_digest": "0ff0af844280207bd22b216846e74810d36b1acff3bbaac0e3dff65d9971d55e",
+  "cpu_only_speed_comparison_required": false,
+  "forbidden_claims": [
+    "CPU speedup",
+    "V5 performance superiority",
+    "CEO-MESC Phase I result",
+    "FCI-based selection",
+    "molecular generalization"
+  ],
+  "gpu_semantics": "AER_GPU_STATEVECTOR_PLUS_HOST_SPARSE_EXPECTATION",
+  "gradient_semantics": "EXISTING_PINNED_CPU_GRADIENT_UNCHANGED",
+  "optimizer_semantics": "EXISTING_PINNED_BFGS_UNCHANGED",
+  "resource_semantics": "EXISTING_REGISTERED_PHYSICAL_RESOURCE_RECOUNT",
+  "scheduler": {
+    "array": "0-2%2",
+    "cpus_per_task": 4,
+    "gpu_per_task": 1,
+    "memory_mb_per_task": 32000,
+    "partition": "gpu-short",
+    "time_limit": "01:00:00"
+  },
+  "schema": "aic-a100-dual-optimizer.preexecution-contract.v1",
+  "scientific_boundary": {
+    "candidate_energy_is_engineering_fixture_evidence_only": true,
+    "fci_evaluations_authorized": false,
+    "matched_work_claim_authorized": false,
+    "performance_claim_authorized": false
+  },
+  "source_sha256": "80ac69c2462bdca2894321ba50e791882d9140658d8e4bf94b01288060552736",
+  "speed_is_a_go_no_go_criterion": false
+}
