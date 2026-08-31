@@ -1,0 +1,81 @@
+{
+  "schema": "aic-a100-dual-optimizer.execution-incident.v1",
+  "status": "NO_GO_DUAL_A100_BEH2_TIME_CAP_V1",
+  "created_utc": "2026-08-31T21:16:00Z",
+  "execution": {
+    "array_job_id": "2055",
+    "exact_repository_head": "c6521c2057e67faa45041fcf0f84e828268317a3",
+    "contract_digest": "d0c33ae85c4db4212275fc1012cebf266c930b0ebddb0587fd221b25fbb12dd4",
+    "partition": "gpu-short",
+    "frozen_time_limit": "01:00:00",
+    "case_order": [
+      "h2",
+      "h6",
+      "beh2"
+    ]
+  },
+  "slurm_terminal_states": {
+    "h2": {
+      "state": "COMPLETED",
+      "exit_code": "0:0",
+      "elapsed": "00:00:06"
+    },
+    "h6": {
+      "state": "COMPLETED",
+      "exit_code": "0:0",
+      "elapsed": "00:27:56"
+    },
+    "beh2": {
+      "state": "TIMEOUT",
+      "exit_code": "0:0",
+      "elapsed": "01:00:16",
+      "batch_state": "CANCELLED",
+      "batch_exit_code": "0:15",
+      "batch_elapsed": "01:00:17"
+    }
+  },
+  "scientific_terminal_states": {
+    "h2": "PASS",
+    "h6": "PASS",
+    "beh2": "NO_TERMINAL_SCIENTIFIC_RESULT"
+  },
+  "checks": {
+    "h2_certificate_passed": true,
+    "h6_certificate_passed": true,
+    "beh2_start_record_present": true,
+    "beh2_scientific_result_absent": true,
+    "beh2_terminal_record_absent": true,
+    "beh2_slurm_timeout_message_present": true,
+    "h2_h6_overlap_on_distinct_gpu_uuid_digests": true,
+    "completed_cases_no_cpu_fallback": true,
+    "completed_cases_gpu_objective_invoked": true,
+    "completed_cases_no_full_cpu_optimization": true,
+    "all_three_cases_passed": false,
+    "merged_go_authorized": false
+  },
+  "evidence_sha256": {
+    "h2_start": "cedd587924baaf8c79cca26a73db8137c805820ddac746decbf3e83341b20360",
+    "h2_scientific_result": "81ab6d3fafefa94785204014a3ff87a399529c872aacbeb00ca1f50c26d69a36",
+    "h2_terminal": "43e7b477731dd0342afa63a3edb7f5bed692e8976ab20c6da4d3bb495bf2fffe",
+    "h6_start": "e6542f235560627006cf38804eabf7f6c9b15dc8427681bfee5ae9becb77517a",
+    "h6_scientific_result": "8db201b22d8fc4dba4bc9a5b257b8f8deacc26e0178a9bc2c9d84e963d08192e",
+    "h6_terminal": "d2ec8ab497e8942627f63566ecfd69fe73c55633508e0c1a691cffaa835c9e4d",
+    "beh2_start": "7e5d82038448231d8755e858d7664dc81ada3d4e9676a4df32cd7c6150d4809b",
+    "beh2_slurm_stderr": "18fb21e068107d2ab20d052618a3b9906a74e39dd7fb65a836a99462eaa930f1"
+  },
+  "scientific_boundary": {
+    "engineering_qualification_only": true,
+    "FCI_evaluations": 0,
+    "performance_claim": "NOT_AUTHORIZED",
+    "CPU_speed_comparison": "NOT_REQUIRED_AND_NOT_USED",
+    "CEO_MESC_phase_I": "NOT_STARTED",
+    "partial_two_case_go_claim": "NOT_AUTHORIZED",
+    "beh2_performance_interpretation": "NOT_AUTHORIZED"
+  },
+  "next_action_boundary": {
+    "automatic_retry": "NOT_AUTHORIZED",
+    "change_to_gpu_standard": "REQUIRES_ADDITIVE_SUCCESSOR_PROTOCOL",
+    "reuse_h2_h6_as_performance_results": "NOT_AUTHORIZED",
+    "preserve_v4_job_2055_evidence": true
+  }
+}
