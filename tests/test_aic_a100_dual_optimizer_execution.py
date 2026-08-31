@@ -8,6 +8,7 @@ from aic_a100_pilot.dual_optimizer_execution import (
     CASES,
     STATUS_GO,
     STATUS_NO_GO,
+    _select_allocated_gpu,
     intervals_overlap,
     merge_shards,
 )
@@ -43,6 +44,24 @@ def test_gpu_identity_is_privacy_preserving():
     public = hashlib.sha256(raw_uuid.encode("utf-8")).hexdigest()
     assert raw_uuid not in public
     assert len(public) == 64
+
+
+def test_gpu_identity_accepts_unambiguous_cgroup_renumbering():
+    selected, mode = _select_allocated_gpu(
+        [{"index": "0", "uuid": "GPU-physical-four"}], "4"
+    )
+    assert selected["uuid"] == "GPU-physical-four"
+    assert mode == "SINGLE_CGROUP_VISIBLE_GPU"
+
+
+def test_gpu_identity_requires_exact_match_when_multiple_are_visible():
+    rows = [
+        {"index": "0", "uuid": "GPU-zero"},
+        {"index": "4", "uuid": "GPU-four"},
+    ]
+    selected, mode = _select_allocated_gpu(rows, "4")
+    assert selected["uuid"] == "GPU-four"
+    assert mode == "EXACT_HOST_INDEX_OR_UUID"
 
 
 def _publish(path: Path, value: dict) -> dict:

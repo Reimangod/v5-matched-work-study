@@ -1,0 +1,34 @@
+{
+  "candidate_outcome_status": "NOT_USED_AND_UNCERTIFIED",
+  "FCI_evaluations": 0,
+  "incident_digest": "b1d9b5f206c515e426779c591033dd2cb33c6be5587c2a032bf105f50e170ff0",
+  "incidents": [
+    {
+      "cause": "MANUAL_FULL_SHA_TRANSCRIPTION_ERROR",
+      "job_id": 2043,
+      "observed_terminal_states": {
+        "0": "FAILED",
+        "1": "FAILED",
+        "2": "FAILED"
+      },
+      "quantum_execution_started": false,
+      "safety_control": "EXACT_HEAD_GATE_REJECTED_ALL_TASKS"
+    },
+    {
+      "cause": "THREAD_BINDING_AND_CGROUP_GPU_IDENTITY_ASSUMPTIONS",
+      "job_id": 2046,
+      "observed_terminal_states": {
+        "0": "FAILED_THREAD_ENVIRONMENT",
+        "1": "FAILED_GPU_IDENTITY_MAPPING",
+        "2": "OPERATOR_CANCELLED_AFTER_SIBLING_FAILURE"
+      },
+      "scientific_result_certified": false,
+      "task_2_candidate_operation_count": "UNKNOWN_NOT_CLAIMED",
+      "task_2_SIGKILL_used": false
+    }
+  ],
+  "performance_claim": "NOT_AUTHORIZED",
+  "retention_policy": "REMOTE_LOGS_AND_PARTIAL_SHARDS_PRESERVED_NO_OVERWRITE",
+  "schema": "aic-a100-dual-optimizer.v1-dispatch-incidents.v1",
+  "successor": "aic-a100-dual-optimizer.preexecution-contract.v2"
+}

@@ -16,15 +16,19 @@ site="${environment_root}/gpu-venv/lib/python3.10/site-packages"
 libs="$(find "${site}" -type d -path '*/lib' -print | sort | paste -sd: -)"
 export LD_LIBRARY_PATH="${libs}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 export PYTHONPATH="${repo}/src:${repo}/provenance/dvg-obs-ceo/src:${repo}/provenance/dvg-obs-ceo/vendor/ceo-adapt-vqe"
-export OMP_NUM_THREADS=1
-export MKL_NUM_THREADS=1
-export OPENBLAS_NUM_THREADS=1
-export NUMEXPR_NUM_THREADS=1
-export VECLIB_MAXIMUM_THREADS=1
-
 cases=(h2 h6 beh2)
 case_alias="${cases[${SLURM_ARRAY_TASK_ID}]}"
-output_root="${root}/dual-optimizer-v1/${A100_EXPECTED_HEAD}"
+if [[ "${case_alias}" == "h2" ]]; then
+  frozen_threads=2
+else
+  frozen_threads=1
+fi
+export OMP_NUM_THREADS="${frozen_threads}"
+export MKL_NUM_THREADS="${frozen_threads}"
+export OPENBLAS_NUM_THREADS="${frozen_threads}"
+export NUMEXPR_NUM_THREADS="${frozen_threads}"
+export VECLIB_MAXIMUM_THREADS="${frozen_threads}"
+output_root="${root}/dual-optimizer-v2/${A100_EXPECTED_HEAD}"
 
 cd "${repo}"
 test "$(git rev-parse HEAD)" = "${A100_EXPECTED_HEAD}"

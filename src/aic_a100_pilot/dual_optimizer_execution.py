@@ -27,11 +27,11 @@ from .objective_parity import run_case
 
 
 CASES = ("h2", "h6", "beh2")
-STATUS_GO = "GO_DUAL_A100_SCIENTIFIC_EXECUTION_V1"
-STATUS_NO_GO = "NO_GO_DUAL_A100_EXECUTION_V1"
+STATUS_GO = "GO_DUAL_A100_SCIENTIFIC_EXECUTION_V2"
+STATUS_NO_GO = "NO_GO_DUAL_A100_EXECUTION_V2"
 CONTRACT = (
     Path(__file__).resolve().parents[2]
-    / "artifacts/aic-a100-dual-optimizer-v1/preexecution/contract-v1.json"
+    / "artifacts/aic-a100-dual-optimizer-v1/preexecution/contract-v2.json"
 )
 
 
@@ -44,6 +44,31 @@ def _single_token(name: str) -> str:
     if len(values) != 1:
         raise A100PilotError(f"{name} must identify exactly one GPU, observed={values!r}")
     return values[0]
+
+
+def _select_allocated_gpu(
+    rows: Sequence[Mapping[str, str]], allocated: str
+) -> tuple[Mapping[str, str], str]:
+    """Resolve Slurm physical identity under either host or cgroup indexing.
+
+    Some Slurm configurations expose only the allocated device to
+    ``nvidia-smi`` and renumber it to zero while ``SLURM_JOB_GPUS`` retains the
+    host-physical index.  A single management-visible row is therefore already
+    an unambiguous binding.  If multiple rows are visible, exact index/UUID
+    matching remains mandatory.
+    """
+
+    if len(rows) == 1:
+        return rows[0], "SINGLE_CGROUP_VISIBLE_GPU"
+    matches = [
+        row for row in rows if row["index"] == allocated or row["uuid"] == allocated
+    ]
+    if len(matches) != 1:
+        raise A100PilotError(
+            "SLURM_JOB_GPUS did not resolve to exactly one management GPU: "
+            f"allocated={allocated!r}, rows={len(rows)}, matches={len(matches)}"
+        )
+    return matches[0], "EXACT_HOST_INDEX_OR_UUID"
 
 
 def allocated_gpu_observation() -> dict[str, Any]:
@@ -76,17 +101,7 @@ def allocated_gpu_observation() -> dict[str, Any]:
                 "memory_total_mib": fields[4],
             }
         )
-    matches = [
-        row
-        for row in rows
-        if row["index"] == allocated or row["uuid"] == allocated
-    ]
-    if len(matches) != 1:
-        raise A100PilotError(
-            "SLURM_JOB_GPUS did not resolve to exactly one management GPU: "
-            f"allocated={allocated!r}, matches={len(matches)}"
-        )
-    selected = matches[0]
+    selected, identity_mode = _select_allocated_gpu(rows, allocated)
     if "A100" not in selected["model"].upper():
         raise A100PilotError(f"allocated device is not an A100: {selected['model']!r}")
     return {
@@ -96,6 +111,8 @@ def allocated_gpu_observation() -> dict[str, Any]:
         "gpu_uuid_sha256": hashlib.sha256(selected["uuid"].encode("utf-8")).hexdigest(),
         "CUDA_VISIBLE_DEVICES_count": 1,
         "SLURM_JOB_GPUS_count": 1,
+        "identity_resolution_mode": identity_mode,
+        "nvidia_smi_visible_gpu_count": len(rows),
         "CUDA_VISIBLE_DEVICES_token_sha256": hashlib.sha256(visible.encode("utf-8")).hexdigest(),
     }
 
@@ -144,7 +161,7 @@ def execute_task(alias: str, output_root: Path) -> dict[str, Any]:
     gpu = allocated_gpu_observation()
     started_ns = time.time_ns()
     start = {
-        "schema": "aic-a100-dual-optimizer.task-start.v1",
+        "schema": "aic-a100-dual-optimizer.task-start.v2",
         "alias": alias,
         "task_id": task_id,
         "task_count": task_count,
@@ -185,7 +202,7 @@ def execute_task(alias: str, output_root: Path) -> dict[str, Any]:
 
     ended_ns = time.time_ns()
     terminal = {
-        "schema": "aic-a100-dual-optimizer.task-terminal.v1",
+        "schema": "aic-a100-dual-optimizer.task-terminal.v2",
         "status": status,
         "failure_type": failure_type,
         "alias": alias,
@@ -285,7 +302,7 @@ def merge_shards(output_root: Path) -> dict[str, Any]:
     }
     status = STATUS_GO if all(checks.values()) else STATUS_NO_GO
     report = {
-        "schema": "aic-a100-dual-optimizer.merged-decision.v1",
+        "schema": "aic-a100-dual-optimizer.merged-decision.v2",
         "status": status,
         "checks": checks,
         "overlap_pairs": overlap_pairs,

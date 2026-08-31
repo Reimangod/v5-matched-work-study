@@ -1,4 +1,4 @@
-# Dual-A100 GPU-backed VQE execution v1
+# Dual-A100 GPU-backed VQE execution v2
 
 ## Purpose
 
@@ -36,6 +36,13 @@ supersede them. Its new question is concurrent dispatch and artifact isolation:
 4. each task writes to an immutable private shard;
 5. a deterministic merger verifies all CPU/GPU scientific certificates.
 
+The v1 dispatch attempts (Slurm 2043 and 2046) are retained as infrastructure
+incidents. Job 2043 demonstrated exact-HEAD rejection after a manual SHA
+transcription error. Job 2046 identified case-specific thread binding and
+Slurm/cgroup GPU-index interpretation errors. No v1 result is eligible for a
+scientific or performance claim. V2 uses a new output namespace and never
+overwrites a v1 shard.
+
 ## Frozen dispatch
 
 ```text
@@ -56,7 +63,7 @@ untouched.
 
 ## GO conditions
 
-`GO_DUAL_A100_SCIENTIFIC_EXECUTION_V1` requires all of the following:
+`GO_DUAL_A100_SCIENTIFIC_EXECUTION_V2` requires all of the following:
 
 - all three task terminals and scientific results are present and digest-valid;
 - at least two task intervals overlap on different GPU UUID digests;
