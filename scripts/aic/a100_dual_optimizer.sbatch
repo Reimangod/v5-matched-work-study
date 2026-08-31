@@ -28,7 +28,7 @@ export MKL_NUM_THREADS="${frozen_threads}"
 export OPENBLAS_NUM_THREADS="${frozen_threads}"
 export NUMEXPR_NUM_THREADS="${frozen_threads}"
 export VECLIB_MAXIMUM_THREADS="${frozen_threads}"
-output_root="${root}/dual-optimizer-v3/${A100_EXPECTED_HEAD}"
+output_root="${root}/dual-optimizer-v4/${A100_EXPECTED_HEAD}"
 
 cd "${repo}"
 test "$(git rev-parse HEAD)" = "${A100_EXPECTED_HEAD}"

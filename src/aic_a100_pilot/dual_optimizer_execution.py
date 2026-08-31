@@ -24,15 +24,15 @@ from typing import Any, Mapping, Sequence
 from v5_matched_work.atomic_artifacts import write_json_exclusive
 
 from .common import A100PilotError, digest, embedded_digest_valid, load_json, sha256_file
-from .objective_parity import run_case
+from .gpu_terminal_certification import run_case
 
 
 CASES = ("h2", "h6", "beh2")
-STATUS_GO = "GO_DUAL_A100_SCIENTIFIC_EXECUTION_V3"
-STATUS_NO_GO = "NO_GO_DUAL_A100_EXECUTION_V3"
+STATUS_GO = "GO_DUAL_A100_SCIENTIFIC_EXECUTION_V4"
+STATUS_NO_GO = "NO_GO_DUAL_A100_EXECUTION_V4"
 CONTRACT = (
     Path(__file__).resolve().parents[2]
-    / "artifacts/aic-a100-dual-optimizer-v1/preexecution/contract-v3.json"
+    / "artifacts/aic-a100-dual-optimizer-v1/preexecution/contract-v4.json"
 )
 
 
@@ -153,6 +153,11 @@ def _load_contract() -> dict[str, Any]:
     source = Path(__file__).resolve()
     if contract.get("source_sha256") != sha256_file(source):
         raise A100PilotError("dual-A100 executor source differs from frozen contract")
+    certificate_source = source.with_name("gpu_terminal_certification.py")
+    if contract.get("terminal_certification_source_sha256") != sha256_file(
+        certificate_source
+    ):
+        raise A100PilotError("terminal CPU certificate source differs from contract")
     return contract
 
 
@@ -186,7 +191,7 @@ def execute_task(alias: str, output_root: Path) -> dict[str, Any]:
     gpu = allocated_gpu_observation()
     started_ns = time.time_ns()
     start = {
-        "schema": "aic-a100-dual-optimizer.task-start.v3",
+        "schema": "aic-a100-dual-optimizer.task-start.v4",
         "alias": alias,
         "task_id": task_id,
         "task_count": task_count,
@@ -210,7 +215,7 @@ def execute_task(alias: str, output_root: Path) -> dict[str, Any]:
     try:
         scientific = run_case(alias)
         scientific["dual_dispatch_note"] = (
-            "Existing frozen CPU/GPU objective-parity result; no VQE semantics changed."
+            "GPU-backed optimization with terminal-only CPU certification; no VQE semantics changed."
         )
         scientific["record_digest"] = digest(
             {key: value for key, value in scientific.items() if key != "record_digest"}
@@ -227,7 +232,7 @@ def execute_task(alias: str, output_root: Path) -> dict[str, Any]:
 
     ended_ns = time.time_ns()
     terminal = {
-        "schema": "aic-a100-dual-optimizer.task-terminal.v3",
+        "schema": "aic-a100-dual-optimizer.task-terminal.v4",
         "status": status,
         "failure_type": failure_type,
         "alias": alias,
@@ -327,7 +332,7 @@ def merge_shards(output_root: Path) -> dict[str, Any]:
     }
     status = STATUS_GO if all(checks.values()) else STATUS_NO_GO
     report = {
-        "schema": "aic-a100-dual-optimizer.merged-decision.v3",
+        "schema": "aic-a100-dual-optimizer.merged-decision.v4",
         "status": status,
         "checks": checks,
         "overlap_pairs": overlap_pairs,

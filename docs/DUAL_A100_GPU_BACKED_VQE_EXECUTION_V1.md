@@ -1,4 +1,4 @@
-# Dual-A100 GPU-backed VQE execution v3
+# Dual-A100 GPU-backed VQE execution v4
 
 ## Purpose
 
@@ -50,6 +50,15 @@ to the UUID returned by the CUDA driver for the process-visible logical device
 zero and separately requires that exactly one CUDA device is visible. The V2
 namespace remains immutable.
 
+V3 (Slurm 2052) proved distinct concurrent CUDA UUIDs and completed H2, but it
+also revealed that reusing the historical objective-parity route performed a
+second full optimization on CPU. That work was useful for an earlier speed and
+trajectory comparison but is unnecessary for the present qualification. H6
+and BeH2 were operator-cancelled after 18 minutes, before a certified terminal
+result, and their partial shards remain non-scientific evidence. V4 performs
+one GPU-backed optimization and only a terminal CPU energy, gradient, state,
+resource, and acceptance certificate.
+
 ## Frozen dispatch
 
 ```text
@@ -70,7 +79,7 @@ untouched.
 
 ## GO conditions
 
-`GO_DUAL_A100_SCIENTIFIC_EXECUTION_V3` requires all of the following:
+`GO_DUAL_A100_SCIENTIFIC_EXECUTION_V4` requires all of the following:
 
 - all three task terminals and scientific results are present and digest-valid;
 - at least two task intervals overlap on different GPU UUID digests;

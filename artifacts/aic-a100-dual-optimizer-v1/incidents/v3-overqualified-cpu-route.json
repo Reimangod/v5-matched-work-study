@@ -1,0 +1,16 @@
+{
+  "FCI_evaluations": 0,
+  "incident_digest": "ec3033510152f93ea30671e5a6cd4bc18c60e43f93dd959b2ad55f19d382a8ae",
+  "job_id": 2052,
+  "performance_claim": "NOT_AUTHORIZED",
+  "result_summary": {
+    "beh2": "OPERATOR_CANCELLED_NO_CERTIFIED_TERMINAL_RESULT",
+    "h2": "CPU_GPU_SCIENTIFIC_CERTIFICATE_PASS_ENGINEERING_ONLY",
+    "h6": "OPERATOR_CANCELLED_NO_CERTIFIED_TERMINAL_RESULT"
+  },
+  "root_cause": "HISTORICAL_OBJECTIVE_PARITY_ROUTE_PERFORMED_AN_UNNECESSARY_SECOND_FULL_CPU_OPTIMIZATION",
+  "schema": "aic-a100-dual-optimizer.v3-overqualified-cpu-route.v1",
+  "scientific_use": "ONLY_H2_IS_A_CERTIFIED_ENGINEERING_FIXTURE_RESULT",
+  "successor": "aic-a100-dual-optimizer.preexecution-contract.v4",
+  "v3_artifacts": "PRESERVED_NO_OVERWRITE"
+}
