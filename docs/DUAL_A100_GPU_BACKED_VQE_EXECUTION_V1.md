@@ -48,6 +48,12 @@ time/task       1 hour
 case order      h2, h6, beh2
 ```
 
+The test uses a new project root at
+`/share/$USER/aic-a100-dual-optimizer-v1`. The already-qualified pinned GPU
+environment is mounted read-only by convention from the earlier pilot root;
+the earlier repository checkout and all historical Slurm logs are left
+untouched.
+
 ## GO conditions
 
 `GO_DUAL_A100_SCIENTIFIC_EXECUTION_V1` requires all of the following:
