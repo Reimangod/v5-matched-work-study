@@ -15,7 +15,9 @@ jobs:
           submodules: recursive
       - uses: astral-sh/setup-uv@v6
       - name: Install pinned test runtime
-        run: uv sync --extra test
+        run: |
+          uv sync --extra test
+          uv pip install --python .venv/bin/python numpy==1.23.5 scipy==1.10.1
       - name: Verify additive incident, contract, and optimizer accounting
         run: >-
           uv run pytest -q
