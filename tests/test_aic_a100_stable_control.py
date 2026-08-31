@@ -36,6 +36,17 @@ EXPECTED_V4_H4_SHA256 = (
 EXPECTED_V4_TERMINAL_SHA256 = (
     "93c40ac7d43977bb86ea2ecd4a6a82d232c78b70155c0f985d3a7541fa5d5a3f"
 )
+H2_RESULT = CONTRACT.parents[1] / "p7-unified-stable-v1/results/h2.json"
+H2_PREPARATION = (
+    CONTRACT.parents[1]
+    / "p7-unified-stable-v1/preparation-manifests/h2.json"
+)
+EXPECTED_H2_RESULT_SHA256 = (
+    "baa0beb34c7a288e2a407454ecd9cd6955ba20a53d19e6536be31e217e479b23"
+)
+EXPECTED_H2_PREPARATION_SHA256 = (
+    "67835d9004fcdd76a2733d1661d0df18e94bd2f86e08b26e0ebe4ca05c37d554"
+)
 
 
 def _float_hex(value: float) -> str:
@@ -144,3 +155,24 @@ def test_stable_batch_preserves_two_process_and_one_thread_numerical_route():
     ):
         assert f'{variable}="${{source_threads}}"' in batch
         assert f"{variable}=1" in batch
+
+
+def test_h2_stable_control_result_is_an_exact_a100_pass():
+    result = load_json(H2_RESULT)
+    preparation = load_json(H2_PREPARATION)
+    assert sha256_file(H2_RESULT) == EXPECTED_H2_RESULT_SHA256
+    assert sha256_file(H2_PREPARATION) == EXPECTED_H2_PREPARATION_SHA256
+    assert embedded_digest_valid(result, "record_digest")
+    assert embedded_digest_valid(preparation, "manifest_digest")
+    assert result["status"] == "PASS"
+    assert result["alias"] == "h2"
+    assert all(result["checks"].values())
+    assert result["hardware"]["gpu"]["model"] == "NVIDIA A100-SXM4-80GB"
+    assert result["hardware"]["gpu"]["slurm_job_gpu_count"] == 1
+    assert result["route_counters"]["gpu"]["N_cpu_fallback"] == 0
+    assert result["control_audit"]["control_codes_exact_equal"] is True
+    assert all(value == 0.0 for value in result["terminal_differences"].values())
+    assert result["scientific_boundary"]["FCI_evaluations"] == 0
+    assert result["scientific_boundary"]["existing_90_item_execution"] == (
+        "UNCHANGED"
+    )
