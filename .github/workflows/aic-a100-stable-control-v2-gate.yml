@@ -1,0 +1,23 @@
+name: AIC A100 stable-control v2 gate
+
+on:
+  push:
+    branches:
+      - infra/aic-a100-stable-control-v2
+  pull_request:
+
+jobs:
+  stable-control-v2:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: astral-sh/setup-uv@v6
+      - name: Install pinned test runtime
+        run: uv sync --extra test
+      - name: Verify additive incident, contract, and optimizer accounting
+        run: >-
+          uv run pytest -q
+          tests/test_aic_a100_stable_control.py
+          tests/test_aic_a100_stable_control_v2.py
