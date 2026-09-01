@@ -1,0 +1,41 @@
+{
+  "schema": "aic-a100-beh2-successor.preexecution-contract.v1",
+  "case": "beh2",
+  "scheduler_change_only": true,
+  "predecessor_status": "NO_GO_DUAL_A100_BEH2_TIME_CAP_V1",
+  "predecessor_incident_sha256": "bbd288187b841179df149e7d144eceae40c48aa0e9691e8424d34ffe2de09cda",
+  "inherited_v4_contract_digest": "d0c33ae85c4db4212275fc1012cebf266c930b0ebddb0587fd221b25fbb12dd4",
+  "scheduler": {
+    "partition": "gpu-standard",
+    "time_limit": "04:00:00",
+    "gpu_per_task": 1,
+    "cpus_per_task": 4,
+    "memory_mb_per_task": 32000,
+    "numerical_threads": 1
+  },
+  "unchanged_scientific_semantics": [
+    "molecular fixture",
+    "candidate",
+    "Hamiltonian",
+    "circuit",
+    "GPU objective",
+    "pinned BFGS",
+    "analytic gradient",
+    "stopping rule",
+    "acceptance rule",
+    "terminal CPU certificate",
+    "physical-resource recount"
+  ],
+  "source_sha256": "3ada7c8a2e56f42a2e0a5b4ab805e5cd806fbef38011651bf1d210598e8ac8d8",
+  "dispatch_source_sha256": "f7495207891c0de4ca87abf44f1b8a6f54eda0cc28949a9a0a3759ed40ab7974",
+  "terminal_certification_source_sha256": "76cb762a4b975a140321380ca4b345d5b48f386e5cb5713804ea854ed80bbfde",
+  "scientific_boundary": {
+    "engineering_fixture_only": true,
+    "fci_evaluations_authorized": false,
+    "performance_claim_authorized": false,
+    "speed_claim_authorized": false,
+    "CEO_MESC_phase_I_authorized": false
+  },
+  "automatic_retry_after_terminal": false,
+  "contract_digest": "e7b6ae779bf90da729a0c6f61576b44306afe3b75247ed147e745f04ba8f5ddd"
+}
