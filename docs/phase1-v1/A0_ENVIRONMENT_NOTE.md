@@ -10,7 +10,7 @@ Observed scientific runtime versions:
 - NumPy 1.23.5
 - SciPy 1.10.1
 - PySCF 2.2.0
-- Qiskit 0.24.2
+- Qiskit meta-package 0.43.3 / Qiskit Terra 0.24.2
 - OpenFermion 1.5.1
 
 PySCF 2.2.0 uses a legacy CMake policy declaration that CMake 4.4 no longer
