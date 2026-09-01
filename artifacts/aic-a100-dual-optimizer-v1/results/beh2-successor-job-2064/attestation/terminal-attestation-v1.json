@@ -1,0 +1,58 @@
+{
+  "schema": "aic-a100-beh2-successor.terminal-attestation.v1",
+  "status": "GO_DUAL_A100_SCIENTIFIC_EXECUTION_SUCCESSOR_V1",
+  "created_utc": "2026-09-01T15:40:00Z",
+  "predecessor": {
+    "array_job_id": "2055",
+    "status": "NO_GO_DUAL_A100_BEH2_TIME_CAP_V1",
+    "beh2_elapsed": "01:00:16",
+    "beh2_scientific_result": "ABSENT"
+  },
+  "successor": {
+    "job_id": "2064",
+    "state": "COMPLETED",
+    "exit_code": "0:0",
+    "elapsed": "01:05:39",
+    "exact_repository_head": "7067e7893000aafe602ed812aef4ab07d9b9b235",
+    "contract_digest": "e7b6ae779bf90da729a0c6f61576b44306afe3b75247ed147e745f04ba8f5ddd",
+    "partition": "gpu-standard",
+    "time_limit": "04:00:00"
+  },
+  "checks": {
+    "predecessor_time_cap_is_preserved": true,
+    "scheduler_change_only": true,
+    "beh2_terminal_passed": true,
+    "beh2_scientific_certificate_passed": true,
+    "all_three_terminal_certificates_passed": true,
+    "all_three_scientific_certificates_passed": true,
+    "h2_h6_overlap_on_distinct_a100s": true,
+    "gpu_objective_invoked": true,
+    "no_cpu_fallback": true,
+    "no_full_cpu_optimization": true,
+    "one_gpu_visible_per_task": true,
+    "speed_excluded_from_decision": true
+  },
+  "evidence_sha256": {
+    "beh2_start": "a15eecd47787b26db9be3d74d5e0d1826120048ce844316bee2d15464eed16f6",
+    "beh2_scientific_result": "45956ddab7f52c0e03565172c188fa8963465520c9b43fe715b17f5e20317020",
+    "beh2_terminal": "3fa1e2f9453b00cd338b9a6682c16a1d62879e035399ff527472bab222499a40",
+    "merged_decision": "8368bacf01a774460ac10164100fc667c83dc5ecfbca2fed4566325f2fb729f1",
+    "slurm_stdout": "b889e7889016d2485041ad90edfdac04f49fa99d687e4960ffdc3fb310b0e1ce"
+  },
+  "engineering_incidents": [
+    {
+      "id": "SLURM_STDOUT_LANDED_IN_REMOTE_WORKTREE",
+      "scientific_impact": "NONE",
+      "resolution": "Copied locally, SHA-256 verified, moved to the dedicated remote logs directory, and remote worktree verified clean.",
+      "future_requirement": "Any new successor dispatch must declare dedicated Slurm output and error paths before freeze."
+    }
+  ],
+  "scientific_boundary": {
+    "engineering_qualification_only": true,
+    "FCI_evaluations": 0,
+    "performance_claim": "NOT_AUTHORIZED",
+    "CPU_speed_comparison": "NOT_REQUIRED_AND_NOT_USED",
+    "CEO_MESC_phase_I": "NOT_STARTED"
+  },
+  "record_digest": "2bce33ba380bc1abc60cb5e478186f2030a7f58f4305631ed4b1e088aa8854bf"
+}
