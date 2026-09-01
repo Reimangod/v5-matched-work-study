@@ -1,0 +1,48 @@
+{
+  "allowed_claim": "Two concurrent one-GPU Slurm tasks can run one GPU-backed VQE optimization each and pass terminal-only CPU scientific certification.",
+  "cases": [
+    "h2",
+    "h6",
+    "beh2"
+  ],
+  "contract_digest": "d0c33ae85c4db4212275fc1012cebf266c930b0ebddb0587fd221b25fbb12dd4",
+  "cpu_only_speed_comparison_required": false,
+  "cpu_route": "TERMINAL_ENERGY_GRADIENT_STATE_RESOURCE_ACCEPTANCE_CERTIFICATE_ONLY",
+  "forbidden_claims": [
+    "CPU speedup",
+    "V5 performance superiority",
+    "CEO-MESC Phase I result",
+    "FCI-based selection",
+    "molecular generalization"
+  ],
+  "full_cpu_optimization_authorized": false,
+  "gpu_identity_semantics": "CUDA_DRIVER_SINGLE_LOGICAL_DEVICE_UUID",
+  "gpu_semantics": "AER_GPU_STATEVECTOR_PLUS_HOST_SPARSE_EXPECTATION",
+  "gradient_semantics": "EXISTING_PINNED_CPU_ANALYTIC_GRADIENT_UNCHANGED",
+  "optimizer_semantics": "EXISTING_PINNED_BFGS_UNCHANGED",
+  "resource_semantics": "EXISTING_REGISTERED_PHYSICAL_RESOURCE_RECOUNT",
+  "scheduler": {
+    "array": "0-2%2",
+    "case_thread_counts": {
+      "beh2": 1,
+      "h2": 2,
+      "h6": 1
+    },
+    "cpus_per_task": 4,
+    "gpu_per_task": 1,
+    "memory_mb_per_task": 32000,
+    "partition": "gpu-short",
+    "time_limit": "01:00:00"
+  },
+  "schema": "aic-a100-dual-optimizer.preexecution-contract.v4",
+  "scientific_boundary": {
+    "candidate_energy_is_engineering_fixture_evidence_only": true,
+    "fci_evaluations_authorized": false,
+    "matched_work_claim_authorized": false,
+    "performance_claim_authorized": false
+  },
+  "source_sha256": "34e2b0a0d0217e52e3be65ac3b2d74bef4ef196cdc872721a7a089b7ec1de4f4",
+  "speed_is_a_go_no_go_criterion": false,
+  "supersedes_for_execution_only": "aic-a100-dual-optimizer.preexecution-contract.v3",
+  "terminal_certification_source_sha256": "76cb762a4b975a140321380ca4b345d5b48f386e5cb5713804ea854ed80bbfde"
+}

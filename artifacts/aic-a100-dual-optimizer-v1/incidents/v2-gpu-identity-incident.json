@@ -1,0 +1,16 @@
+{
+  "FCI_evaluations": 0,
+  "incident_digest": "8f4a3782e2a3e7b9e038e1d41d70be4f7dab9d780b14262edc73fd78b6c26d7a",
+  "job_id": 2049,
+  "performance_claim": "NOT_AUTHORIZED",
+  "result_summary": {
+    "beh2": "PRE_KERNEL_GPU_IDENTITY_REJECTION",
+    "h2": "CPU_GPU_SCIENTIFIC_CERTIFICATE_PASS_ENGINEERING_ONLY",
+    "h6": "PRE_KERNEL_GPU_IDENTITY_REJECTION"
+  },
+  "root_cause": "NVIDIA_SMI_MANAGEMENT_INDEX_WAS_NOT_EQUIVALENT_TO_SLURM_CGROUP_EXECUTION_INDEX",
+  "schema": "aic-a100-dual-optimizer.v2-gpu-identity-incident.v1",
+  "scientific_use": "H2_PASS_IS_ENGINEERING_FIXTURE_EVIDENCE_ONLY_AND_NOT_A_PERFORMANCE_RESULT",
+  "successor": "aic-a100-dual-optimizer.preexecution-contract.v3",
+  "v2_artifacts": "PRESERVED_NO_OVERWRITE"
+}
