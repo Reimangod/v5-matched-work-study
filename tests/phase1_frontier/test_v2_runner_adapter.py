@@ -44,8 +44,8 @@ def test_unknown_request_is_rejected_before_kernel_work() -> None:
         bind_request("phase1-v2-request:" + "f" * 64)
 
 
-def test_molecular_execution_is_blocked_before_s4(tmp_path) -> None:
-    with pytest.raises(V2RunnerBindingError, match="blocked until a valid S4.1"):
+def test_unregistered_molecular_request_is_blocked_after_s4_1(tmp_path) -> None:
+    with pytest.raises(V2RunnerBindingError, match="not in the frozen queue"):
         execute_bound_request(
             "phase1-v2-request:" + "f" * 64,
             tmp_path / "must-not-exist",
