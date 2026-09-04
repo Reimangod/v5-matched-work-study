@@ -1,0 +1,2 @@
+{"E2_file_sha256":"db0522df8b0e54aa9e298cd461e3b29be9be8023e4e5ce194602e038992e513a","NoGo_file_sha256":"ec84de9b5da92a9b2d3ccb322c21ac5e45303aafa16a9a76b2f5981c230f9e85","checks":{"E2_digest":true,"E2_valid":true,"NoGo_decision":true,"NoGo_digest":true,"NoGo_reason":true,"all_E3_work_zero":true,"queue_absent":true,"target_count_exact":true},"decision":"NO_GO_A5_E2_OR_QUEUE_INVALID","passed":true,"schema":"phase1-frontier.a5-e2-capacity-audit.v1"}
+
