@@ -65,6 +65,10 @@ class V2RunnerBindingError(RuntimeError):
 S4_READINESS_PATH = (
     QUEUE_PATH.parents[1] / "s4-readiness" / "phase1-v2-s4-readiness-v1.json"
 )
+S4_1_READINESS_PATH = (
+    QUEUE_PATH.parents[1] / "s4.1-order-gate" / "phase1-v2-s4.1-order-gate-v1.json"
+)
+S5_EXECUTION_ROOT = QUEUE_PATH.parents[1] / "s5-frozen-execution"
 
 
 @dataclass(frozen=True)
@@ -452,18 +456,51 @@ def _execute_bound_request(bound: BoundV2Request, execution_root: Path) -> dict[
 
 
 def execute_bound_request(request_id: str, execution_root: Path) -> dict[str, Any]:
-    """Run one molecular queue request only after the authoritative S4 Go."""
+    """Run only the next frozen request after the additive S4.1 order Go."""
 
     try:
-        readiness = _read_digest_valid(S4_READINESS_PATH, "readiness_digest")
+        readiness = _read_digest_valid(S4_1_READINESS_PATH, "readiness_digest")
     except (FileNotFoundError, KeyError, ValueError) as error:
         raise V2RunnerBindingError(
-            "molecular outcome execution is blocked until a valid S4 readiness Go"
+            "molecular outcome execution is blocked until a valid S4.1 order Go"
         ) from error
     if (
-        readiness.get("decision") != "GO_PHASE1_V2_FROZEN_SCREEN_EXECUTION"
+        readiness.get("decision") != "GO_PHASE1_V2_ORDERED_SCREEN_EXECUTION"
         or readiness.get("queue_sha256")
         != hashlib.sha256(QUEUE_PATH.read_bytes()).hexdigest()
     ):
-        raise V2RunnerBindingError("S4 readiness does not authorize this exact queue")
+        raise V2RunnerBindingError("S4.1 does not authorize this exact queue")
+    _validate_frozen_execution_order(request_id, execution_root)
     return _execute_bound_request(bind_request(request_id), execution_root)
+
+
+def _validate_frozen_execution_order(
+    request_id: str,
+    execution_root: Path,
+    *,
+    base_root: Path = S5_EXECUTION_ROOT,
+) -> None:
+    """Refuse gaps, future artifacts, and noncanonical result locations."""
+
+    queue = load_frozen_queue()
+    request_ids = [row["RequestID"] for row in queue["items"]]
+    try:
+        index = request_ids.index(request_id)
+    except ValueError as error:
+        raise V2RunnerBindingError("request is not in the frozen queue") from error
+    expected_root = base_root / f"{index:04d}-{request_id.rsplit(':', 1)[-1]}"
+    if execution_root.resolve() != expected_root.resolve():
+        raise V2RunnerBindingError("execution root is not the canonical frozen index path")
+    base_root.mkdir(parents=True, exist_ok=True)
+    for prior_index, prior_id in enumerate(request_ids[:index]):
+        prior = (
+            base_root
+            / f"{prior_index:04d}-{prior_id.rsplit(':', 1)[-1]}"
+            / "terminal-result.json"
+        )
+        if not prior.is_file():
+            raise V2RunnerBindingError("a prior frozen request is not terminal")
+    for later_index, later_id in enumerate(request_ids[index + 1 :], index + 1):
+        later = base_root / f"{later_index:04d}-{later_id.rsplit(':', 1)[-1]}"
+        if later.exists():
+            raise V2RunnerBindingError("a later frozen request exists before its turn")

@@ -7,6 +7,7 @@ import pytest
 from phase1_frontier.a5_successor_v2 import QUEUE_PATH
 from phase1_frontier.v2_runner_adapter import (
     V2RunnerBindingError,
+    _validate_frozen_execution_order,
     bind_request,
     execute_bound_request,
     load_frozen_queue,
@@ -44,9 +45,39 @@ def test_unknown_request_is_rejected_before_kernel_work() -> None:
 
 
 def test_molecular_execution_is_blocked_before_s4(tmp_path) -> None:
-    with pytest.raises(V2RunnerBindingError, match="blocked until a valid S4"):
+    with pytest.raises(V2RunnerBindingError, match="blocked until a valid S4.1"):
         execute_bound_request(
             "phase1-v2-request:" + "f" * 64,
             tmp_path / "must-not-exist",
         )
     assert not (tmp_path / "must-not-exist").exists()
+
+
+def test_frozen_order_accepts_only_item_zero_in_fresh_namespace(tmp_path) -> None:
+    queue = json.loads(QUEUE_PATH.read_text(encoding="utf-8"))
+    first, second = queue["items"][:2]
+    first_root = tmp_path / f"0000-{first['RequestID'].rsplit(':', 1)[-1]}"
+    _validate_frozen_execution_order(
+        first["RequestID"], first_root, base_root=tmp_path
+    )
+    second_root = tmp_path / f"0001-{second['RequestID'].rsplit(':', 1)[-1]}"
+    with pytest.raises(V2RunnerBindingError, match="prior frozen request"):
+        _validate_frozen_execution_order(
+            second["RequestID"], second_root, base_root=tmp_path
+        )
+
+
+def test_frozen_order_rejects_noncanonical_path_and_future_artifact(tmp_path) -> None:
+    queue = json.loads(QUEUE_PATH.read_text(encoding="utf-8"))
+    first, second = queue["items"][:2]
+    with pytest.raises(V2RunnerBindingError, match="canonical frozen index"):
+        _validate_frozen_execution_order(
+            first["RequestID"], tmp_path / "wrong", base_root=tmp_path
+        )
+    later = tmp_path / f"0001-{second['RequestID'].rsplit(':', 1)[-1]}"
+    later.mkdir()
+    first_root = tmp_path / f"0000-{first['RequestID'].rsplit(':', 1)[-1]}"
+    with pytest.raises(V2RunnerBindingError, match="later frozen request"):
+        _validate_frozen_execution_order(
+            first["RequestID"], first_root, base_root=tmp_path
+        )
