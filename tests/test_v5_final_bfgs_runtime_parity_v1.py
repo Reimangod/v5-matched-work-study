@@ -3,7 +3,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from v5_final.parent_native_execution_services import ActualOptimizationBoundary
+from v5_final.parent_native_execution_services import (
+    ActualOptimizationBoundary,
+    ParentNativeExecutionError,
+)
 from v5_final.parent_native_work_accounting import (
     ComponentwiseCapRejected,
     ParentNativeWorkRecorder,
@@ -186,3 +189,24 @@ def test_failed_call_is_counted_and_retry_does_not_reset_prior_work():
     assert resumed.total.energy_evaluations == 1
     assert resumed.total.optimizer_starts == 2
     assert resumed.events[: len(failed_events)] == failed_events
+
+
+def test_request_bound_maxiter_is_forwarded_to_pinned_bfgs():
+    algorithm = _Quadratic()
+    optimizer, recorder = _boundary(algorithm)
+    result = optimizer.optimize(
+        [1.0, -1.0], [0, 1], np.eye(2), maxiter=1
+    )
+    assert result.status == 1
+    assert result.success is False
+    assert result.nit == 1
+    assert _operation_count(recorder, "optimizer-iteration") == 1
+
+
+@pytest.mark.parametrize("invalid", [0, -1, 1.5, True])
+def test_request_bound_maxiter_rejects_invalid_values(invalid):
+    algorithm = _Quadratic()
+    optimizer, recorder = _boundary(algorithm)
+    with pytest.raises(ParentNativeExecutionError, match="maximum iterations"):
+        optimizer.optimize([1.0, -1.0], [0, 1], np.eye(2), maxiter=invalid)
+    assert recorder.events == ()

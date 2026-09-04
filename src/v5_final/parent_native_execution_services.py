@@ -283,9 +283,8 @@ class ActualOptimizationBoundary:
         *,
         f0: float | None = None,
         g0: Any | None = None,
+        maxiter: int = 1000,
     ) -> Any:
-        from adaptvqe.minimize import minimize_bfgs
-
         initial_array = np.asarray(initial, dtype=np.float64)
         index_values = list(indices)
         if initial_array.ndim != 1 or len(index_values) != len(initial_array):
@@ -295,6 +294,12 @@ class ActualOptimizationBoundary:
         inverse_array = np.asarray(inverse_hessian, dtype=np.float64)
         if inverse_array.shape != (len(initial_array), len(initial_array)):
             raise ParentNativeExecutionError("optimizer inverse Hessian shape differs")
+        if not isinstance(maxiter, int) or isinstance(maxiter, bool) or maxiter <= 0:
+            raise ParentNativeExecutionError(
+                "optimizer maximum iterations must be a positive integer"
+            )
+        from adaptvqe.minimize import minimize_bfgs
+
         seeded_gradient = None if g0 is None else np.asarray(g0, dtype=np.float64)
         if seeded_gradient is not None and seeded_gradient.shape != initial_array.shape:
             raise ParentNativeExecutionError("optimizer initial gradient shape differs")
@@ -344,7 +349,7 @@ class ActualOptimizationBoundary:
             jac=jacobian,
             callback=callback,
             gtol=1e-8,
-            maxiter=1000,
+            maxiter=maxiter,
             disp=False,
             initial_inv_hessian=inverse_array,
             f0=f0,
