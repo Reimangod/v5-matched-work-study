@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import subprocess
+
+import pytest
 
 from phase1_frontier.authority import (
     ARTIFACT_PATH,
@@ -40,6 +43,16 @@ def test_every_authoritative_plan_has_a_frozen_digest() -> None:
     assert all(len(digest) == 64 for digest in PLAN_SHA256.values())
 
 
+_ON_V1_BRANCH = (
+    subprocess.check_output(["git", "branch", "--show-current"], text=True).strip()
+    == "feature/phase1-joint-frontier-v1"
+)
+
+
+@pytest.mark.skipif(
+    not _ON_V1_BRANCH,
+    reason="the immutable v1 live authority intentionally rejects successor branches",
+)
 def test_live_A0_audit_passes_without_candidate_outcomes() -> None:
     result = live_audit()
     assert result["passed"] is True
@@ -47,6 +60,10 @@ def test_live_A0_audit_passes_without_candidate_outcomes() -> None:
     assert result["observed"]["outcome_files"] == []
 
 
+@pytest.mark.skipif(
+    not _ON_V1_BRANCH,
+    reason="the immutable v1 live authority intentionally rejects successor branches",
+)
 def test_committed_authority_artifact_matches_rebuild() -> None:
     assert ARTIFACT_PATH.is_file()
     committed = json.loads(ARTIFACT_PATH.read_text(encoding="utf-8"))

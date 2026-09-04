@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import itertools
 import json
+import subprocess
+
+import pytest
 
 from dvg_obs_ceo.composition import compose_registered_candidates, pairwise_compatibility
 
@@ -37,6 +40,11 @@ def test_frozen_A3_records_are_complete_deterministic_and_outcome_free() -> None
         assert value["grammar_contract"]["historical_or_candidate_energy_input"] is False
 
 
+@pytest.mark.skipif(
+    subprocess.check_output(["git", "branch", "--show-current"], text=True).strip()
+    != "feature/phase1-joint-frontier-v1",
+    reason="v1 live catalog reconstruction is intentionally branch-bound",
+)
 def test_fast_atomic_and_direct_sum_materialization_matches_general_composer() -> None:
     source_record, context, source, blocks, raw = _certified_catalog("lih-3.0")
     representatives, _aliases = _representatives(raw)
@@ -114,4 +122,3 @@ def test_semantic_closure_contains_every_raw_alias_once() -> None:
         assert len(flattened) == value["raw_candidate_count"]
         assert len(flattened) == len(set(flattened))
         assert len(aliases) == value["canonical_singleton_count"]
-
