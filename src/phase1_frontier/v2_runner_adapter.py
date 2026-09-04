@@ -56,6 +56,13 @@ from .a5_successor_v2 import (
     _read_digest_valid,
     _v2_catalog,
 )
+from .v2_execution_integrity import (
+    V2ExecutionIntegrityError,
+    publish_prefix_manifest,
+    publish_terminal_attestation,
+    sha256_file,
+    validate_prefix_manifest,
+)
 
 
 class V2RunnerBindingError(RuntimeError):
@@ -68,7 +75,11 @@ S4_READINESS_PATH = (
 S4_1_READINESS_PATH = (
     QUEUE_PATH.parents[1] / "s4.1-order-gate" / "phase1-v2-s4.1-order-gate-v1.json"
 )
+S4_2_READINESS_PATH = (
+    QUEUE_PATH.parents[1] / "s4.2-authority" / "phase1-v2-s4.2-authority-v1.json"
+)
 S5_EXECUTION_ROOT = QUEUE_PATH.parents[1] / "s5-frozen-execution"
+S5_ATTESTATION_ROOT = QUEUE_PATH.parents[1] / "s5-prefix-attestations"
 
 
 @dataclass(frozen=True)
@@ -456,22 +467,57 @@ def _execute_bound_request(bound: BoundV2Request, execution_root: Path) -> dict[
 
 
 def execute_bound_request(request_id: str, execution_root: Path) -> dict[str, Any]:
-    """Run only the next frozen request after the additive S4.1 order Go."""
+    """Run only the next request authorized by the exact S4.2 code and prefix."""
 
     try:
-        readiness = _read_digest_valid(S4_1_READINESS_PATH, "readiness_digest")
+        readiness = _read_digest_valid(S4_2_READINESS_PATH, "readiness_digest")
     except (FileNotFoundError, KeyError, ValueError) as error:
         raise V2RunnerBindingError(
-            "molecular outcome execution is blocked until a valid S4.1 order Go"
+            "molecular outcome execution is blocked until a valid S4.2 authority Go"
         ) from error
+    adapter_path = Path(__file__).resolve()
+    integrity_path = adapter_path.with_name("v2_execution_integrity.py")
     if (
-        readiness.get("decision") != "GO_PHASE1_V2_ORDERED_SCREEN_EXECUTION"
+        readiness.get("decision") != "GO_PHASE1_V2_S4_2_EXECUTION"
         or readiness.get("queue_sha256")
         != hashlib.sha256(QUEUE_PATH.read_bytes()).hexdigest()
+        or readiness.get("adapter_sha256") != sha256_file(adapter_path)
+        or readiness.get("integrity_module_sha256") != sha256_file(integrity_path)
     ):
-        raise V2RunnerBindingError("S4.1 does not authorize this exact queue")
+        raise V2RunnerBindingError(
+            "S4.2 does not authorize this exact queue and execution code"
+        )
     _validate_frozen_execution_order(request_id, execution_root)
-    return _execute_bound_request(bind_request(request_id), execution_root)
+    queue = load_frozen_queue()
+    request_ids = [row["RequestID"] for row in queue["items"]]
+    index = request_ids.index(request_id)
+    try:
+        validate_prefix_manifest(
+            queue=queue,
+            expected_count=index,
+            attestation_root=S5_ATTESTATION_ROOT,
+        )
+    except V2ExecutionIntegrityError as error:
+        raise V2RunnerBindingError("terminal prefix integrity check failed") from error
+    bound = bind_request(request_id)
+    result = _execute_bound_request(bound, execution_root)
+    try:
+        publish_terminal_attestation(
+            index=index,
+            row=queue["items"][index],
+            base_root=S5_EXECUTION_ROOT,
+            attestation_root=S5_ATTESTATION_ROOT,
+            request=bound.work_request,
+            cap=bound.cap,
+        )
+        publish_prefix_manifest(
+            queue=queue,
+            terminal_count=index + 1,
+            attestation_root=S5_ATTESTATION_ROOT,
+        )
+    except V2ExecutionIntegrityError as error:
+        raise V2RunnerBindingError("terminal publication integrity check failed") from error
+    return result
 
 
 def _validate_frozen_execution_order(
